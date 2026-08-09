@@ -29,7 +29,7 @@ namespace Pho.Player
         [Header("Detection")]
         [Tooltip("Camera the SphereCast originates from. Auto-resolved via GetComponentInChildren<Camera>() if left empty.")]
         [SerializeField] Camera eye;
-        [Tooltip("Physics layer(s) stations register their collider on. Project layers aren't set up yet -- set this once they are.")]
+        [Tooltip("Physics layer(s) stations register their collider on. An EMPTY mask (0) is treated as 'every layer' -- see EffectiveMask -- because a zero mask would otherwise silently disable all interaction.")]
         [SerializeField] LayerMask interactableMask;
         [SerializeField] float range = 2.5f;
         [SerializeField] float sphereRadius = 0.12f;
@@ -117,7 +117,7 @@ namespace Pho.Player
 
             bool hitSomething = Physics.SphereCast(
                 origin, sphereRadius, direction, out var hit, range,
-                interactableMask, QueryTriggerInteraction.Ignore);
+                EffectiveMask(), QueryTriggerInteraction.Ignore);
 
             if (hitSomething) _lastHit = hit;
 
@@ -131,6 +131,37 @@ namespace Pho.Player
                 TryInteract(_hysteresis.Current);
             }
         }
+
+        /// <summary>
+        /// Safety net against a silently-dead interactor. A LayerMask's
+        /// serialized default is 0, and Physics.SphereCast with a zero mask
+        /// matches NOTHING -- an unconfigured PlayerInteractor would appear
+        /// perfectly healthy (no errors, no warnings) while making the whole
+        /// game unplayable. That exact bug shipped in the generated
+        /// Boot.unity until it was caught by reading the serialized
+        /// `m_Bits: 0` directly.
+        ///
+        /// Treating an empty mask as "every layer" is safe: every hit is
+        /// still filtered through GetComponentInParent&lt;IInteractable&gt;()
+        /// in <see cref="ResolveInteractable"/>, so a permissive physics
+        /// mask cannot produce a false positive. SceneBuilder also sets this
+        /// explicitly to ~0; this fallback covers hand-added components and
+        /// any scene authored before that fix.
+        /// </summary>
+        int EffectiveMask()
+        {
+            if (interactableMask.value != 0) return interactableMask.value;
+
+            if (!_warnedEmptyMask)
+            {
+                _warnedEmptyMask = true;
+                Debug.LogWarning($"[PlayerInteractor] interactableMask is empty on '{name}' -- falling back to every layer so interaction still works. Set it explicitly to silence this.");
+            }
+
+            return ~0;
+        }
+
+        bool _warnedEmptyMask;
 
         IInteractable ResolveInteractable(Collider col)
         {

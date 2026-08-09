@@ -17,6 +17,7 @@ using Pho.Domain.Events;
 using Pho.Domain.Identity;
 using Pho.Domain.Orders;
 using Pho.Kitchen;
+using Pho.UI.Presenters;
 
 namespace Pho.PlayTests
 {
@@ -171,9 +172,20 @@ namespace Pho.PlayTests
             var cashBeforePay = economy.Cash;
             economy.Credit(servedDish.QuotedPrice, LedgerCategory.Sale); // mirrors CustomerAgent.Pay's real body exactly
 
-            // ---- Step 11: Player earns money. ----
+            // ---- Step 11: Player earns money (and the HUD actually shows it). ----
             Assert.That(economy.Cash, Is.EqualTo(cashBeforePay + servedDish.QuotedPrice));
             Assert.That(economy.Cash, Is.GreaterThan(EconomyService.StartingCash), "Cash should have grown past the starting balance after a paid sale.");
+
+            // The HUD presenters are live event subscribers, so by this point
+            // they must already reflect real gameplay -- this is what proves
+            // HudInstaller ran and bound them, not just that the classes exist.
+            Assert.That(ctx.TryGet<CashPresenter>(out var cashPresenter), Is.True, "No CashPresenter registered -- HudInstaller did not run.");
+            Assert.That(cashPresenter.HasReceivedUpdate, Is.True, "CashPresenter never observed a CashChanged -- it was constructed but never bound to the event bus.");
+            Assert.That(cashPresenter.Cash, Is.EqualTo(economy.Cash), "HUD cash is out of sync with the real EconomyService balance.");
+
+            Assert.That(ctx.TryGet<OrderBoardPresenter>(out var orderBoard), Is.True, "No OrderBoardPresenter registered -- HudInstaller did not run.");
+            Assert.That(orderBoard.TryGetOrder(orderId, out var ticket), Is.True, "The order never reached the order board -- OrderBoardPresenter is not bound to OrderPlaced.");
+            Assert.That(ticket.State, Is.EqualTo(OrderState.Completed), "Order board should have tracked this order all the way to Completed via OrderStateChanged.");
 
             // ---- Step 12: SKIPPED -- no cleanliness mechanic exists yet, see class doc comment. ----
 

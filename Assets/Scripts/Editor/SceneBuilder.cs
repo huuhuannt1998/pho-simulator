@@ -260,7 +260,7 @@ namespace Pho.EditorTools
             player.AddComponent<CharacterController>();
 
             var motor = player.AddComponent<FirstPersonMotor>();
-            player.AddComponent<PlayerInteractor>();
+            var interactor = player.AddComponent<PlayerInteractor>();
 
             var cameraPivot = new GameObject(CameraPivotName);
             cameraPivot.transform.SetParent(player.transform, false);
@@ -279,12 +279,26 @@ namespace Pho.EditorTools
             // GetComponentInChildren<Camera>() in Awake when left empty,
             // and holdAnchor auto-creates under eye when left empty --
             // both confirmed by reading PlayerInteractor.cs -- so neither
-            // needs wiring here. interactableMask is deliberately left at
-            // its serialized default (no layers) since the project doesn't
-            // have an "Interactable" physics layer set up yet either
-            // (PlayerInteractor's own tooltip says as much); wiring it to
-            // something meaningful is a later pass's job once that layer
-            // exists.
+            // needs wiring here.
+            //
+            // interactableMask MUST be set explicitly. A LayerMask's
+            // serialized default is m_Bits: 0, and Physics.SphereCast with a
+            // zero mask matches NOTHING -- so leaving it at its default (as
+            // this method previously did, on the reasoning that no dedicated
+            // "Interactable" layer exists yet) silently made the player
+            // unable to interact with anything at all in play mode. Verified
+            // by reading `m_Bits: 0` straight out of the generated
+            // Boot.unity, not inferred.
+            //
+            // ~0 (every layer) is the correct vertical-slice value rather
+            // than a placeholder: PlayerInteractor.ResolveInteractable
+            // already filters every hit through
+            // GetComponentInParent<IInteractable>(), so a permissive
+            // physics mask cannot produce a false positive -- it only costs
+            // a slightly wider broadphase. Narrowing this to a dedicated
+            // layer is a performance/polish refinement for later, not a
+            // correctness requirement.
+            SetSerializedInt(interactor, "interactableMask", ~0);
         }
 
         static void BuildGameManager()
@@ -640,6 +654,21 @@ namespace Pho.EditorTools
             }
 
             prop.floatValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>Same rationale as <see cref="SetSerializedField"/>, for a private int-backed field (LayerMask serializes as an int).</summary>
+        static void SetSerializedInt(UnityEngine.Object target, string fieldName, int value)
+        {
+            var so = new SerializedObject(target);
+            var prop = so.FindProperty(fieldName);
+            if (prop == null)
+            {
+                Debug.LogWarning($"[SceneBuilder] Could not find serialized field '{fieldName}' on {target.GetType().Name} -- skipping wire-up.");
+                return;
+            }
+
+            prop.intValue = value;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
