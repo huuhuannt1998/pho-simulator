@@ -109,8 +109,21 @@ namespace Pho.Kitchen
 
         static Vector3 GetItemHalfExtents(IHoldable item)
         {
+            // A held item's collider is always disabled (see
+            // BowlObject.OnPickedUp / CarryableObject's mirrored logic) --
+            // and Unity reports a degenerate zero-size Collider.bounds for a
+            // disabled collider (confirmed empirically, not assumed: a real
+            // bowl's bounds came back Center correct, Extents (0,0,0) while
+            // held). Since TryGetPlacement is only ever called with a
+            // currently-held item (see CanInteract's `ctx.Agent.Held is
+            // BowlObject` guard), skipping straight to the Renderer-bounds
+            // fallback below for a disabled collider is not an edge case --
+            // it is the ONLY path this ever actually takes at runtime.
+            // Without this check, every placement attempt silently computed
+            // a zero-size item and self-overlapped the counter's own top
+            // surface, making it impossible to ever place anything.
             var col = item.Transform.GetComponentInChildren<Collider>();
-            if (col != null) return col.bounds.extents;
+            if (col != null && col.enabled) return col.bounds.extents;
 
             var rend = item.Transform.GetComponentInChildren<Renderer>();
             if (rend != null) return rend.bounds.extents;

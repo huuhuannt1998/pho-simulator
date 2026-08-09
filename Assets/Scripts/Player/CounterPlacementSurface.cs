@@ -77,8 +77,15 @@ namespace Pho.Player
 
         static Vector3 GetItemHalfExtents(IHoldable item)
         {
+            // See PassCounter.GetItemHalfExtents's identical fix for the
+            // full explanation: a held item's collider is always disabled,
+            // and Unity reports zero-size Collider.bounds for a disabled
+            // collider (confirmed empirically) -- so this must fall through
+            // to the Renderer-bounds branch below, or every placement
+            // attempt silently computes a zero-size item and self-overlaps
+            // the counter's own top surface.
             var col = item.Transform.GetComponentInChildren<Collider>();
-            if (col != null) return col.bounds.extents;
+            if (col != null && col.enabled) return col.bounds.extents;
 
             var rend = item.Transform.GetComponentInChildren<Renderer>();
             if (rend != null) return rend.bounds.extents;

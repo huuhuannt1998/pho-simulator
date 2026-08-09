@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Pho.Core.Economy;
+using Pho.Core.Orders;
 using Pho.Domain.Contracts;
 using Pho.Domain.Events;
 using Pho.Domain.Infra;
@@ -54,6 +56,12 @@ namespace Pho.Customers
         bool _bound;
         float _timer;
 
+        // Forwarded onto every spawned CustomerAgent -- see
+        // CustomerAgent.Bind's orderService/economyService doc comments.
+        // Optional/trailing for the same mergeability reason as there.
+        OrderService _orderService;
+        EconomyService _economyService;
+
         bool _warnedNoPrefab;
         bool _warnedNoArchetypes;
 
@@ -61,15 +69,19 @@ namespace Pho.Customers
         /// Injection seam, same pattern as `CustomerAgent.Bind` /
         /// `PlayerInteractor.Bind`. `database` is optional -- if null (or
         /// its `Archetypes` list is empty), spawning is skipped with a
-        /// warning rather than throwing.
+        /// warning rather than throwing. `orderService`/`economyService` are
+        /// forwarded verbatim to every spawned `CustomerAgent.Bind` call --
+        /// see that method's doc comments for what a null value degrades to.
         /// </summary>
-        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, IGameDatabase database, IRandom rng)
+        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, IGameDatabase database, IRandom rng, OrderService orderService = null, EconomyService economyService = null)
         {
             _tableRegistry = registry;
             _cfg = cfg;
             _events = events;
             _database = database;
             _rng = rng ?? new SystemRandom();
+            _orderService = orderService;
+            _economyService = economyService;
             _bound = true;
             _timer = 0f;
         }
@@ -114,7 +126,7 @@ namespace Pho.Customers
 
             var agent = Instantiate(customerPrefab, spawnPosition, spawnRotation);
             agent.SetWorldAnchors(entranceTransform, exitTransform);
-            agent.Bind(_tableRegistry, _cfg, _events, archetype, _rng);
+            agent.Bind(_tableRegistry, _cfg, _events, archetype, _rng, _orderService, _economyService);
         }
 
         /// <summary>Weighted pick by `ICustomerArchetype.SpawnWeight`. Falls back to a uniform pick if every weight is non-positive, so a bad content config never blocks spawning entirely.</summary>
