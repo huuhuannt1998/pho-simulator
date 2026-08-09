@@ -22,13 +22,27 @@ namespace Pho.Core.DayCycle
     {
         RestaurantStateServiceBehaviour _service;
 
+        /// <summary>The composition root <see cref="_service"/> came from -- see the stale-context note in TryResolveService.</summary>
+        GameContext _ctx;
+
         bool TryResolveService()
         {
-            if (_service != null) return true;
-
             var ctx = GameBootstrap.Current;
             if (ctx == null) return false;
 
+            // Same stale-context hazard DirtyTable.TryResolveService documents
+            // at length: GameBootstrap.Current is static and survives a scene
+            // unload, so a cached service can belong to a dead context after a
+            // reload -- here that would leave the sign driving the PREVIOUS
+            // scene's day clock, so opening the restaurant would appear to do
+            // nothing. Re-resolve whenever the root object changes.
+            if (!ReferenceEquals(ctx, _ctx))
+            {
+                _ctx = ctx;
+                _service = null;
+            }
+
+            if (_service != null) return true;
             return ctx.TryGet(out _service);
         }
 

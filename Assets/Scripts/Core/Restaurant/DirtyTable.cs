@@ -45,6 +45,9 @@ namespace Pho.Core.Restaurant
         CleanlinessService _service;
         bool _registered;
 
+        /// <summary>The composition root <see cref="_service"/> came from -- see the STALE-CONTEXT GUARD in TryResolveService.</summary>
+        GameContext _ctx;
+
         /// <summary>The scene label this table is known by. Read-only at runtime.</summary>
         public string TableId => tableId;
 
@@ -74,13 +77,35 @@ namespace Pho.Core.Restaurant
         {
             if (string.IsNullOrWhiteSpace(tableId)) return false;
 
-            if (_service == null)
-            {
-                var ctx = GameBootstrap.Current;
-                if (ctx == null) return false;
+            var ctx = GameBootstrap.Current;
+            if (ctx == null) return false;
 
-                if (!ctx.TryGet(out _service)) return false;
+            // STALE-CONTEXT GUARD -- do not remove.
+            //
+            // GameBootstrap.Current is static and is NOT cleared when a scene
+            // unloads, so during a scene RELOAD it still points at the
+            // outgoing scene's context until the new GameBootstrap.Awake
+            // replaces it. Unity gives no ordering guarantee between this
+            // component's OnEnable and that Awake, so OnEnable can easily
+            // resolve and register against the DEAD service, cache it, and
+            // set _registered -- after which Start() short-circuits and the
+            // table is never registered with the LIVE service. The table then
+            // silently vanishes from the cleanliness denominator and can
+            // never be dirtied or cleaned, with no error anywhere.
+            //
+            // Caught by the golden-path test failing only when it ran after
+            // another test had already loaded the scene once; it passed in
+            // isolation, which is exactly the shape this bug takes. It would
+            // equally affect loading a save or starting a new day in the
+            // shipped game.
+            if (!ReferenceEquals(ctx, _ctx))
+            {
+                _ctx = ctx;
+                _service = null;
+                _registered = false;
             }
+
+            if (_service == null && !ctx.TryGet(out _service)) return false;
 
             if (!_registered)
             {

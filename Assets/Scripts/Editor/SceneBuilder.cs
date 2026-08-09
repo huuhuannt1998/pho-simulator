@@ -228,6 +228,90 @@ namespace Pho.EditorTools
                 $"customer spawner + entrance/exit, restaurant sign, upgrade station, baked NavMesh.");
         }
 
+        // ------------------------------------------------------------------
+        // Art: model-backed props
+        //
+        // Every gameplay object in this scene used to be a
+        // GameObject.CreatePrimitive cube/cylinder -- which is both the
+        // visual AND the collider AND the component host. Swapping in real
+        // art must NOT disturb the gameplay half of that, because the
+        // colliders are what PlayerInteractor raycasts against and their
+        // sizes are load-bearing (see the interactableMask incident).
+        //
+        // So: the prop root keeps the collider and the gameplay component at
+        // exactly the position/size it always had, and the imported model is
+        // parented underneath purely as visuals, with its own renderers and
+        // NO collider. Gameplay is unchanged by definition; only what you
+        // see changes.
+        //
+        // FALLBACK IS DELIBERATE: if the model file isn't on disk yet (art
+        // still in flight, or a fresh clone before `make art`), this falls
+        // back to the original primitive so the scene still builds and the
+        // game still plays. A missing art asset must never break the build.
+        // ------------------------------------------------------------------
+
+        const string ArtFolder = "Assets/Art/Generated";
+
+        static GameObject ArtModel(string assetName)
+        {
+            // FBX, not GLB: Unity imports FBX natively, whereas .glb needs
+            // the gltfast package. The Blender pipeline writes both.
+            var path = $"{ArtFolder}/{assetName}.fbx";
+            return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        }
+
+        /// <summary>
+        /// Builds a prop with real art when the model exists, falling back to
+        /// a primitive when it doesn't.
+        ///
+        /// POSITION SEMANTICS -- read this before calling: <paramref name="floorPosition"/>
+        /// is where the object CONTACTS THE FLOOR, not its centre. Art models
+        /// have floor-contact origins by construction (see
+        /// art/blender/lib.py's set_origin_to_floor), so this is the natural
+        /// frame for them; the primitive fallback converts to the centre-based
+        /// frame Unity primitives use. Mixing the two conventions silently
+        /// leaves props hovering or sunk, so both branches are derived from
+        /// the same floor position here rather than at each call site.
+        /// </summary>
+        static GameObject BuildProp(string name, string modelAssetName, Vector3 floorPosition, Vector3 colliderSize, PrimitiveType fallback = PrimitiveType.Cube)
+        {
+            var centre = floorPosition + new Vector3(0f, colliderSize.y * 0.5f, 0f);
+
+            var model = ArtModel(modelAssetName);
+            if (model == null)
+            {
+                var primitive = GameObject.CreatePrimitive(fallback);
+                primitive.name = name;
+                primitive.transform.position = centre;
+                primitive.transform.localScale = colliderSize;
+                Debug.LogWarning($"[SceneBuilder] No art model '{modelAssetName}.fbx' in {ArtFolder} -- falling back to a {fallback} primitive for '{name}'. Run the Blender art pipeline to replace it.");
+                return primitive;
+            }
+
+            var root = new GameObject(name);
+            root.transform.position = floorPosition;
+
+            var collider = root.AddComponent<BoxCollider>();
+            collider.size = colliderSize;
+            // Lift the collider so it occupies the same world volume the
+            // primitive did, given the root now sits on the floor.
+            collider.center = new Vector3(0f, colliderSize.y * 0.5f, 0f);
+
+            var visual = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            visual.name = $"{name}_Visual";
+            visual.transform.SetParent(root.transform, worldPositionStays: false);
+            visual.transform.localPosition = Vector3.zero;
+
+            // Imported meshes must not contribute colliders -- the root's
+            // BoxCollider is the single source of truth for interaction.
+            foreach (var c in visual.GetComponentsInChildren<Collider>(true))
+            {
+                UnityEngine.Object.DestroyImmediate(c);
+            }
+
+            return root;
+        }
+
         static void EnsureFolder()
         {
             if (!AssetDatabase.IsValidFolder(ScenesFolder))
@@ -248,16 +332,59 @@ namespace Pho.EditorTools
             return ground;
         }
 
+        // Warm interior lighting. Per the project plan, "stylized realism"
+        // (GDD §40) is achieved through LIGHTING AND MATERIALS, not polygon
+        // count -- this is what keeps procedural art from looking cheap, and
+        // it is the cheapest single quality lever available.
+        //
+        // Three-part setup, all cheap:
+        //  1. A low, warm key light angled in through the shopfront, so the
+        //     room has a clear light direction and real shadows.
+        //  2. A cool, dim ambient fill so shadowed sides aren't dead black --
+        //     warm key against cool fill is the whole trick.
+        //  3. Warm point lights over the seating and the kitchen pass, which
+        //     is what actually sells "small restaurant at night".
+        static readonly Color WarmKey = new Color(1.0f, 0.89f, 0.72f);
+        static readonly Color WarmLamp = new Color(1.0f, 0.82f, 0.58f);
+        static readonly Color CoolAmbient = new Color(0.32f, 0.36f, 0.45f);
+
         static void BuildSun()
         {
             var sunGo = new GameObject(SunName);
-            sunGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            // Low angle (25deg) rakes across the room and makes every bevel
+            // catch a highlight; the steep 50deg it used to sit at flattened
+            // everything into evenly-lit shapes.
+            sunGo.transform.rotation = Quaternion.Euler(25f, -35f, 0f);
 
             var light = sunGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.2f;
-            light.color = Color.white;
+            light.intensity = 1.6f;
+            light.color = WarmKey;
             light.shadows = LightShadows.Soft;
+
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = CoolAmbient;
+            RenderSettings.ambientEquatorColor = CoolAmbient * 0.7f;
+            RenderSettings.ambientGroundColor = new Color(0.12f, 0.10f, 0.09f);
+
+            BuildLamp("Lamp_Dining", DiningOrigin + new Vector3(0f, 2.6f, 0f), range: 9f, intensity: 14f);
+            BuildLamp("Lamp_Kitchen", KitchenOrigin + new Vector3(0f, 2.6f, 0f), range: 9f, intensity: 12f);
+        }
+
+        static void BuildLamp(string name, Vector3 position, float range, float intensity)
+        {
+            var go = new GameObject(name);
+            go.transform.position = position;
+
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = WarmLamp;
+            light.range = range;
+            light.intensity = intensity;
+            // Point-light shadows are the expensive kind and these are fill
+            // lights sitting above the play space -- the directional key
+            // already provides the shadows the eye reads.
+            light.shadows = LightShadows.None;
         }
 
         static void BuildPlayer()
@@ -442,10 +569,11 @@ namespace Pho.EditorTools
                 var tableId = $"table.{t + 1}";
                 var tableWorldXZ = DiningOrigin + TableOffsets[t];
 
-                var table = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                table.name = $"DiningTable_{tableId}";
-                table.transform.position = new Vector3(tableWorldXZ.x, TableHalfHeight, tableWorldXZ.z);
-                table.transform.localScale = TableScale;
+                var table = BuildProp(
+                    $"DiningTable_{tableId}",
+                    "DiningTable",
+                    new Vector3(tableWorldXZ.x, 0f, tableWorldXZ.z),
+                    TableScale);
 
                 // DirtyTable's tableId MUST match the seat slots' tableId
                 // below -- that string is the only link between "a customer
@@ -477,6 +605,23 @@ namespace Pho.EditorTools
                         tableWorldXZ.z);
 
                     seatSlots.Add(new TableRegistry.SeatSlot { tableId = tableId, anchor = seatGo.transform });
+
+                    // A visible stool at each seat. Purely decorative -- the
+                    // seat ANCHOR above is what TableRegistry/CustomerAgent
+                    // actually use, so the stool carries no collider and no
+                    // gameplay meaning, and its absence (art not generated
+                    // yet) changes nothing.
+                    var stoolModel = ArtModel("Stool");
+                    if (stoolModel != null)
+                    {
+                        var stool = (GameObject)PrefabUtility.InstantiatePrefab(stoolModel);
+                        stool.name = $"Stool_{tableId}_{s + 1}";
+                        stool.transform.position = seatGo.transform.position;
+                        foreach (var c in stool.GetComponentsInChildren<Collider>(true))
+                        {
+                            UnityEngine.Object.DestroyImmediate(c);
+                        }
+                    }
                 }
             }
 
