@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using Pho.Core.Economy;
 using Pho.Core.Orders;
 using Pho.Domain.Contracts;
 using Pho.Domain.Customers;
@@ -85,6 +86,12 @@ namespace Pho.Customers
         // unbound customer degrades gracefully instead of NRE-ing.
         OrderService _orderService;
 
+        // Injected by Bind(...). Same null-safe convention as _orderService
+        // above. Wired here (integration pass) now that EconomyService
+        // exists -- see Pay() below, previously a documented stub pending
+        // exactly this.
+        EconomyService _economyService;
+
         // See the SEAT-HANDLE INTEGRATION GAP note in the class doc comment.
         TableRegistry.SeatId _claimedSeatId = TableRegistry.SeatId.Invalid;
         bool _hasClaimedSeat;
@@ -122,7 +129,13 @@ namespace Pho.Customers
         /// degrade-gracefully convention as every other stand-in in this
         /// class.
         /// </param>
-        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, ICustomerArchetype archetype, IRandom rng, OrderService orderService = null)
+        /// <param name="economyService">
+        /// Optional (integration pass, M8/M9) -- reaches the real
+        /// `Pho.Core.Economy.EconomyService` so `Pay` credits real cash
+        /// instead of only logging. Trailing/optional for the same
+        /// mergeability reason as `orderService`. Null-safe.
+        /// </param>
+        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, ICustomerArchetype archetype, IRandom rng, OrderService orderService = null, EconomyService economyService = null)
         {
             _tableRegistry = registry;
             _cfg = cfg;
@@ -130,6 +143,7 @@ namespace Pho.Customers
             _archetype = archetype;
             _rng = rng ?? new SystemRandom();
             _orderService = orderService;
+            _economyService = economyService;
 
             _customerId = new CustomerId(Guid.NewGuid().ToString());
             _brain = new CustomerBrain(_customerId, _archetype, _cfg, _events, _rng);
@@ -341,21 +355,36 @@ namespace Pho.Customers
         }
 
         /// <summary>
-        /// STILL STUBBED-WITH-LOG, deliberately, for this pass:
-        /// `Pho.Core.Orders.OrderService` (this pass) and the economy
-        /// layer's `EconomyService` (a sibling agent's concurrent,
-        /// unseen work in a different worktree) are being built at the same
-        /// time -- referencing the sibling's type here would not compile.
-        /// Real wiring is a small, well-defined reconciliation step for the
-        /// integration pass once both land:
-        /// <c>economyService.Credit(amount + tip, LedgerCategory.Sale);</c>
-        /// (exact method/enum names per whatever EconomyService actually
-        /// ships) in place of the Debug.Log below. Flagged again in the
-        /// final report.
+        /// REAL (integration pass): credits the bill + tip into the real
+        /// `Pho.Core.Economy.EconomyService` as one `LedgerCategory.Sale`
+        /// transaction. Was a documented stub pending exactly this wiring --
+        /// `OrderService` (this file's other consumer) and `EconomyService`
+        /// were built concurrently by two agents that couldn't see each
+        /// other's code, so this connection was deferred to the integration
+        /// step, per both classes' doc comments. Degrades to a log (never
+        /// throws) if no `EconomyService` is bound, or if there's nothing to
+        /// credit (amount + tip &lt;= 0 -- `EconomyService.Credit` itself
+        /// rejects a non-positive amount as a programmer error, so this
+        /// guards that instead of letting a legitimate "customer left
+        /// angry, paid nothing" case throw).
         /// </summary>
         public void Pay(CustomerId id, decimal amount, decimal tip)
         {
-            Debug.Log($"[CustomerAgent] STUB Pay: customer={id} amount={amount:0.00} tip={tip:0.00}. No EconomyService wired yet -- would apply a real cash/ledger change here.");
+            decimal total = amount + tip;
+
+            if (_economyService == null)
+            {
+                Debug.LogWarning($"[CustomerAgent] Pay({id}, amount={amount:0.00}, tip={tip:0.00}) called with no EconomyService bound -- no cash credited.");
+                return;
+            }
+
+            if (total <= 0m)
+            {
+                Debug.Log($"[CustomerAgent] Pay({id}): nothing to credit (amount={amount:0.00}, tip={tip:0.00}).");
+                return;
+            }
+
+            _economyService.Credit(total, LedgerCategory.Sale);
         }
 
         /// <summary>REAL-ish: releases any held seat, then deactivates the GameObject. Not real pooling (out of scope for this pass) -- forward-thinking enough to make pooling a drop-in later, per architecture.md §12's `ICustomerFactory` note.</summary>
