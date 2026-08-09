@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Pho.Core;
+using Pho.Customers;
 using Pho.Data;
+using Pho.Domain.Contracts;
+using Pho.Kitchen;
 using Pho.Player;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -78,6 +82,86 @@ namespace Pho.EditorTools
         const string NavMeshSurfaceAssemblyQualifiedName = "Unity.AI.Navigation.NavMeshSurface, Unity.AI.Navigation";
         const string BuildNavMeshMethodName = "BuildNavMesh";
 
+        // ------------------------------------------------------------------
+        // Kitchen / Dining / Customer additions (Wave 4 content pass).
+        //
+        // ORDERING REQUIREMENT: this method loads Assets/Prefabs/Bowl.prefab
+        // and Assets/Prefabs/Customer.prefab by path (see BuildBowlStack /
+        // BuildCustomerSpawnerAndEntranceExit below). Run
+        // "Pho/Prefabs/Build All Prefabs" (Pho.EditorTools.PrefabBuilder)
+        // BEFORE "Pho/Scenes/Build Boot Scene". If the prefabs don't exist
+        // yet, the affected steps log a clear warning and skip themselves
+        // rather than crashing the whole build.
+        // ------------------------------------------------------------------
+
+        const string BowlPrefabPath = "Assets/Prefabs/Bowl.prefab";
+        const string CustomerPrefabPath = "Assets/Prefabs/Customer.prefab";
+
+        const string BrothPotName = "BrothPot";
+        const string PassCounterName = "PassCounter";
+        const string TableRegistryName = "TableRegistry";
+        const string CustomerSpawnerName = "CustomerSpawner";
+        const string EntranceName = "Entrance";
+        const string ExitName = "Exit";
+
+        // Kitchen sits at x=+5, dining at x=-5 -- both well clear of the
+        // player's spawn at (0,1,-2) and of each other. Coordinates below
+        // are the exact anchors suggested by the brief.
+        static readonly Vector3 KitchenOrigin = new Vector3(5f, 0f, 0f);
+        static readonly Vector3 DiningOrigin = new Vector3(-5f, 0f, 0f);
+
+        static readonly Vector3 BrothPotOffset = new Vector3(0f, 0.5f, -2f);
+        static readonly Vector3 BrothPotScale = new Vector3(0.8f, 0.5f, 0.8f);
+
+        static readonly Vector3 PassCounterOffset = new Vector3(-3f, 0.5f, 0f);
+        static readonly Vector3 PassCounterScale = new Vector3(1.5f, 1f, 0.8f);
+
+        static readonly Vector3 BowlStackOffset = new Vector3(-3f, 0.05f, 1.5f);
+        const int BowlStackCount = 4;
+        const float BowlStackSpacing = 0.15f;
+
+        const float IngredientStationSpacing = 1.5f;
+        const float IngredientStationRowOffsetZ = 2.5f;
+        static readonly Vector3 IngredientStationScale = new Vector3(0.8f, 0.6f, 0.8f);
+
+        // One IngredientStation per ContentManifest ingredient ID (6 total,
+        // per the brief). Slot assignments mirror ContentManifest's
+        // RecipeComponent.slot for that ingredient (rec.pho_tai/rec.pho_chin
+        // agree on the slot per ingredient). NOTE: ing.broth_base is
+        // included here per the brief's explicit "one IngredientStation per
+        // ingredient (6 total)" even though BrothPot -- not
+        // IngredientStation -- is the real gameplay path for broth (see
+        // IngredientStation.cs's own class doc: "Broth is handled separately
+        // by BrothPot because it comes from a simmered pot, not a static
+        // InventoryModel lot"). This station exists for scene/content
+        // completeness alongside the real BrothPot; flagged as a judgment
+        // call in the final report.
+        static readonly (string id, ComponentSlot slot, string displayName, float portion)[] IngredientStationDefs =
+        {
+            ("ing.rice_noodles",   ComponentSlot.Noodle,   "rice noodles",     1.0f),
+            ("ing.beef_brisket",   ComponentSlot.Protein,  "raw beef brisket", 1.0f),
+            ("ing.beef_well_done", ComponentSlot.Protein,  "well-done beef",   1.0f),
+            ("ing.onion",          ComponentSlot.Aromatic, "onion",            0.3f),
+            ("ing.herbs_mixed",    ComponentSlot.Herb,     "mixed herbs",      0.3f),
+            ("ing.broth_base",     ComponentSlot.Broth,    "broth base",       1.0f),
+        };
+
+        const int TableCount = 4;
+        const int SeatsPerTable = 2;
+        static readonly Vector3 TableScale = new Vector3(1.2f, 0.75f, 1.2f);
+        const float TableHalfHeight = 0.375f;
+        const float SeatSideOffset = 0.9f;
+        static readonly Vector3[] TableOffsets =
+        {
+            new Vector3(-2f, 0f, -2f),
+            new Vector3(2f, 0f, -2f),
+            new Vector3(-2f, 0f, 2f),
+            new Vector3(2f, 0f, 2f),
+        };
+
+        static readonly Vector3 EntrancePosition = DiningOrigin + new Vector3(0f, 0f, 4f);
+        static readonly Vector3 ExitPosition = DiningOrigin + new Vector3(-4f, 0f, 4f);
+
         [MenuItem("Pho/Scenes/Build Boot Scene")]
         public static void BuildBootScene()
         {
@@ -89,6 +173,15 @@ namespace Pho.EditorTools
             BuildSun();
             BuildPlayer();
             BuildGameManager();
+
+            BuildKitchenArea();
+            var seatSlots = BuildDiningArea();
+            BuildTableRegistry(seatSlots);
+            BuildCustomerSpawnerAndEntranceExit();
+
+            // Baked LAST so the NavMesh accounts for every obstacle placed
+            // above (kitchen stations, tables) rather than just the bare
+            // ground plane.
             BakeNavMesh(ground);
 
             bool saved = EditorSceneManager.SaveScene(scene, BootScenePath);
@@ -103,7 +196,11 @@ namespace Pho.EditorTools
 
             RegisterInBuildSettings();
 
-            Debug.Log($"[SceneBuilder] Built '{BootScenePath}' -- ground, sun, player @ {PlayerSpawnPosition}, GameBootstrap, baked NavMesh.");
+            Debug.Log(
+                $"[SceneBuilder] Built '{BootScenePath}' -- ground, sun, player @ {PlayerSpawnPosition}, " +
+                $"GameBootstrap, kitchen ({IngredientStationDefs.Length} ingredient stations + broth pot + pass " +
+                $"counter + bowl stack), dining ({TableCount} tables / {seatSlots.Count} seats), " +
+                $"customer spawner + entrance/exit, baked NavMesh.");
         }
 
         static void EnsureFolder()
@@ -201,6 +298,216 @@ namespace Pho.EditorTools
             }
         }
 
+        // ------------------------------------------------------------------
+        // Kitchen
+        // ------------------------------------------------------------------
+
+        static void BuildKitchenArea()
+        {
+            BuildBrothPot();
+            BuildIngredientStations();
+            BuildPassCounter();
+            BuildBowlStack();
+        }
+
+        static void BuildBrothPot()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = BrothPotName;
+            go.transform.position = KitchenOrigin + BrothPotOffset;
+            go.transform.localScale = BrothPotScale;
+            // CreatePrimitive(Cylinder) already adds a Collider (a
+            // CapsuleCollider, per Unity's built-in primitive setup) --
+            // satisfies BrothPot's [RequireComponent(typeof(Collider))]
+            // with zero extra wiring. BrothPot needs no field configuration
+            // beyond its own in-class defaults per the brief.
+            go.AddComponent<BrothPot>();
+        }
+
+        static void BuildIngredientStations()
+        {
+            int n = IngredientStationDefs.Length;
+            float centerIndex = (n - 1) / 2f;
+
+            for (int i = 0; i < n; i++)
+            {
+                var def = IngredientStationDefs[i];
+
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = $"IngredientStation_{def.id}";
+                go.transform.localScale = IngredientStationScale;
+
+                float x = KitchenOrigin.x + (i - centerIndex) * IngredientStationSpacing;
+                float y = IngredientStationScale.y * 0.5f;
+                float z = KitchenOrigin.z + IngredientStationRowOffsetZ;
+                go.transform.position = new Vector3(x, y, z);
+
+                // CreatePrimitive(Cube) already adds a BoxCollider --
+                // satisfies IngredientStation's [RequireComponent(typeof(Collider))].
+                var station = go.AddComponent<IngredientStation>();
+                SetSerializedString(station, "ingredientId", def.id);
+                SetSerializedEnum(station, "slot", def.slot);
+                SetSerializedFloat(station, "portionAmount", def.portion);
+                SetSerializedString(station, "displayName", def.displayName);
+            }
+        }
+
+        static void BuildPassCounter()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = PassCounterName;
+            go.transform.position = KitchenOrigin + PassCounterOffset;
+            go.transform.localScale = PassCounterScale;
+            // CreatePrimitive(Cube) already adds a BoxCollider -- satisfies
+            // PassCounter's [RequireComponent(typeof(Collider))]; its own
+            // Awake() auto-resolves `surfaceCollider` from GetComponent<Collider>()
+            // when left unassigned, so no SetSerializedField call is needed here.
+            go.AddComponent<PassCounter>();
+        }
+
+        static void BuildBowlStack()
+        {
+            var bowlPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BowlPrefabPath);
+            if (bowlPrefab == null)
+            {
+                Debug.LogWarning($"[SceneBuilder] Could not load '{BowlPrefabPath}' -- skipping bowl stack. Run 'Pho/Prefabs/Build All Prefabs' BEFORE 'Pho/Scenes/Build Boot Scene'.");
+                return;
+            }
+
+            var basePosition = KitchenOrigin + BowlStackOffset;
+            for (int i = 0; i < BowlStackCount; i++)
+            {
+                // InstantiatePrefab (not GameObject.Instantiate) keeps the
+                // scene instance linked to the source prefab asset.
+                var bowlInstance = (GameObject)PrefabUtility.InstantiatePrefab(bowlPrefab);
+                bowlInstance.name = $"Bowl_{i + 1}";
+                bowlInstance.transform.position = basePosition + new Vector3(0f, BowlStackSpacing * i, 0f);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Dining
+        // ------------------------------------------------------------------
+
+        static List<TableRegistry.SeatSlot> BuildDiningArea()
+        {
+            var seatSlots = new List<TableRegistry.SeatSlot>(TableCount * SeatsPerTable);
+
+            for (int t = 0; t < TableCount; t++)
+            {
+                var tableId = $"table.{t + 1}";
+                var tableWorldXZ = DiningOrigin + TableOffsets[t];
+
+                var table = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                table.name = $"DiningTable_{tableId}";
+                table.transform.position = new Vector3(tableWorldXZ.x, TableHalfHeight, tableWorldXZ.z);
+                table.transform.localScale = TableScale;
+
+                for (int s = 0; s < SeatsPerTable; s++)
+                {
+                    float sideSign = s == 0 ? 1f : -1f;
+                    var seatGo = new GameObject($"Seat_{tableId}_{s + 1}");
+                    seatGo.transform.SetParent(table.transform, worldPositionStays: false);
+
+                    // Assigned via world .position (not .localPosition)
+                    // deliberately -- the table's non-uniform localScale
+                    // would otherwise distort a localPosition offset (Unity
+                    // scales a child's localPosition by the parent's
+                    // lossyScale). Setting world position sidesteps that.
+                    seatGo.transform.position = new Vector3(
+                        tableWorldXZ.x + sideSign * SeatSideOffset,
+                        0f,
+                        tableWorldXZ.z);
+
+                    seatSlots.Add(new TableRegistry.SeatSlot { tableId = tableId, anchor = seatGo.transform });
+                }
+            }
+
+            return seatSlots;
+        }
+
+        static void BuildTableRegistry(List<TableRegistry.SeatSlot> seatSlots)
+        {
+            var go = new GameObject(TableRegistryName);
+            var registry = go.AddComponent<TableRegistry>();
+
+            var so = new SerializedObject(registry);
+            var seatsProp = so.FindProperty("seats");
+            if (seatsProp == null)
+            {
+                Debug.LogWarning("[SceneBuilder] Could not find serialized field 'seats' on TableRegistry -- skipping seat wire-up.");
+                return;
+            }
+
+            seatsProp.arraySize = seatSlots.Count;
+            for (int i = 0; i < seatSlots.Count; i++)
+            {
+                var element = seatsProp.GetArrayElementAtIndex(i);
+                element.FindPropertyRelative("tableId").stringValue = seatSlots[i].tableId;
+                element.FindPropertyRelative("anchor").objectReferenceValue = seatSlots[i].anchor;
+            }
+
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        // ------------------------------------------------------------------
+        // Customer spawner + entrance/exit
+        // ------------------------------------------------------------------
+
+        static void BuildCustomerSpawnerAndEntranceExit()
+        {
+            var entrance = new GameObject(EntranceName);
+            entrance.transform.position = EntrancePosition;
+
+            var exit = new GameObject(ExitName);
+            exit.transform.position = ExitPosition;
+
+            var spawnerGo = new GameObject(CustomerSpawnerName);
+            var spawner = spawnerGo.AddComponent<CustomerSpawner>();
+
+            SetSerializedField(spawner, "spawnPoint", entrance.transform);
+
+            var customerPrefabGo = AssetDatabase.LoadAssetAtPath<GameObject>(CustomerPrefabPath);
+            if (customerPrefabGo != null)
+            {
+                var customerAgent = customerPrefabGo.GetComponent<CustomerAgent>();
+                if (customerAgent != null)
+                {
+                    SetSerializedField(spawner, "customerPrefab", customerAgent);
+                }
+                else
+                {
+                    Debug.LogWarning($"[SceneBuilder] '{CustomerPrefabPath}' has no CustomerAgent component -- leaving CustomerSpawner.customerPrefab unassigned.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[SceneBuilder] Could not load '{CustomerPrefabPath}' -- CustomerSpawner.customerPrefab left unassigned. Run 'Pho/Prefabs/Build All Prefabs' BEFORE 'Pho/Scenes/Build Boot Scene'.");
+            }
+
+            // KNOWN GAP (flagged again in the final report): CustomerSpawner
+            // (Pho.Customers, NOT owned by this pass) has no serialized
+            // entrance/exit Transform fields of its own -- only
+            // `customerPrefab` and `spawnPoint`. CustomerSpawner.TrySpawn()
+            // Instantiates the prefab and calls CustomerAgent.Bind(...), but
+            // Bind's signature (registry, cfg, events, archetype, rng) has
+            // no entrance/exit parameter either, and there is no other hook
+            // that forwards a Transform onto the freshly spawned
+            // CustomerAgent's private `entranceTransform`/`exitTransform`
+            // fields. Those fields are per-instance
+            // ([SerializeField], not public) and can't be baked into the
+            // shared Customer prefab (see PrefabBuilder.cs's own comment).
+            // The Entrance/Exit GameObjects created above exist in the scene
+            // so a follow-up edit to CustomerSpawner.cs (out of this pass's
+            // ownership -- Assets/Scripts/Customers/** belongs to a
+            // different agent) can wire them onto each spawned
+            // CustomerAgent. Until that lands, every runtime-spawned
+            // customer's entranceTransform/exitTransform stay unassigned,
+            // and CustomerAgent.EntrancePosition/ExitPosition fall back to
+            // Vec3.Zero with a one-time warning (see CustomerAgent.cs's
+            // ResolveAnchor).
+        }
+
         static void BakeNavMesh(GameObject ground)
         {
             var surfaceType = Type.GetType(NavMeshSurfaceAssemblyQualifiedName);
@@ -249,6 +556,56 @@ namespace Pho.EditorTools
             }
 
             prop.objectReferenceValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>Same rationale as <see cref="SetSerializedField"/>, for a private string field.</summary>
+        static void SetSerializedString(UnityEngine.Object target, string fieldName, string value)
+        {
+            var so = new SerializedObject(target);
+            var prop = so.FindProperty(fieldName);
+            if (prop == null)
+            {
+                Debug.LogWarning($"[SceneBuilder] Could not find serialized field '{fieldName}' on {target.GetType().Name} -- skipping wire-up.");
+                return;
+            }
+
+            prop.stringValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>Same rationale as <see cref="SetSerializedField"/>, for a private float field.</summary>
+        static void SetSerializedFloat(UnityEngine.Object target, string fieldName, float value)
+        {
+            var so = new SerializedObject(target);
+            var prop = so.FindProperty(fieldName);
+            if (prop == null)
+            {
+                Debug.LogWarning($"[SceneBuilder] Could not find serialized field '{fieldName}' on {target.GetType().Name} -- skipping wire-up.");
+                return;
+            }
+
+            prop.floatValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Same rationale as <see cref="SetSerializedField"/>, for a private
+        /// plain-int-backed enum field (e.g. ComponentSlot -- declared with
+        /// no custom numeric values, so declaration order == underlying
+        /// value == enumValueIndex).
+        /// </summary>
+        static void SetSerializedEnum<TEnum>(UnityEngine.Object target, string fieldName, TEnum value) where TEnum : Enum
+        {
+            var so = new SerializedObject(target);
+            var prop = so.FindProperty(fieldName);
+            if (prop == null)
+            {
+                Debug.LogWarning($"[SceneBuilder] Could not find serialized field '{fieldName}' on {target.GetType().Name} -- skipping wire-up.");
+                return;
+            }
+
+            prop.enumValueIndex = Convert.ToInt32(value);
             so.ApplyModifiedPropertiesWithoutUndo();
         }
     }
