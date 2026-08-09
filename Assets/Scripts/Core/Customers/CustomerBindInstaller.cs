@@ -3,6 +3,7 @@ using Pho.Core.Economy;
 using Pho.Core.Orders;
 using Pho.Core.Restaurant;
 using Pho.Domain.Contracts;
+using Pho.Domain.Multiplayer;
 using UnityEngine;
 
 namespace Pho.Core.Customers
@@ -76,6 +77,15 @@ namespace Pho.Core.Customers
             }
 
             method.Invoke(spawner, new object[] { tableRegistry, balance, ctx.Events, database, null, orderService, economyService, cleanlinessService });
+
+            // Replica clients must not spawn their own crowd -- the host's
+            // customers are replicated. Set by reflection for the same
+            // asmdef reason the bind above uses it.
+            if (ctx.TryGet<ISimulationAuthority>(out var authority) && !authority.IsSimulationAuthority)
+            {
+                var prop = spawner.GetType().GetProperty("SimulateLocally", BindingFlags.Public | BindingFlags.Instance);
+                prop?.SetValue(spawner, false);
+            }
             Debug.Log("[CustomerBindInstaller] Bound CustomerSpawner.");
         }
     }

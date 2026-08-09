@@ -1,4 +1,5 @@
 using Pho.Domain.Contracts;
+using Pho.Domain.Multiplayer;
 
 namespace Pho.Core.Orders
 {
@@ -31,6 +32,19 @@ namespace Pho.Core.Orders
 
         public void Install(GameContext ctx)
         {
+            // HOST ONLY. This is the highest-priority authority guard in the
+            // project: OrderService mints ids from Guid.NewGuid(), so a
+            // client running its own copy produces a completely disjoint set
+            // of orders that can never be reconciled with the host's -- not
+            // "slightly out of sync", but two separate restaurants.
+            // A missing ISimulationAuthority means single-player, which must
+            // keep working exactly as before, so this only bails when
+            // something explicitly says "you are a replica".
+            if (ctx.TryGet<ISimulationAuthority>(out var authority) && !authority.IsSimulationAuthority)
+            {
+                return;
+            }
+
             // Optional dependency -- OrderService degrades gracefully
             // (quotes $0.00, logs a warning) if no GameDatabase is bound in
             // this scene yet. See OrderService's constructor doc comment.

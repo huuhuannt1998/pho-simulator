@@ -114,7 +114,7 @@ namespace Pho.Net.State
     /// outside this pass's authorized write set, not because there is
     /// anything to decide.
     /// </summary>
-    public sealed class SimulationAuthorityFlag
+    public sealed class SimulationAuthorityFlag : Pho.Domain.Multiplayer.ISimulationAuthority
     {
         /// <summary>See <see cref="NetAuthority.IsSimulationAuthority"/>.</summary>
         public bool IsSimulationAuthority => NetAuthority.IsSimulationAuthority;

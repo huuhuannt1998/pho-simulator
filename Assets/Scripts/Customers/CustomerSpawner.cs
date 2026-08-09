@@ -7,6 +7,7 @@ using Pho.Core.Restaurant;
 using Pho.Domain.Contracts;
 using Pho.Domain.Events;
 using Pho.Domain.Infra;
+using Pho.Domain.Multiplayer;
 
 namespace Pho.Customers
 {
@@ -128,9 +129,17 @@ namespace Pho.Customers
             _subscriptions.Clear();
         }
 
+        /// <summary>
+        /// Set false on a replica client. Customers are spawned by the host
+        /// and replicated; a client that also spawned would fill the
+        /// restaurant with a second, invisible-to-everyone-else crowd.
+        /// Defaults true so single-player is unaffected.
+        /// </summary>
+        public bool SimulateLocally { get; set; } = true;
+
         void Update()
         {
-            if (!_bound) return;
+            if (!_bound || !SimulateLocally) return;
 
             // No arrivals while closed -- see the _restaurantOpen field note.
             if (!_restaurantOpen) return;

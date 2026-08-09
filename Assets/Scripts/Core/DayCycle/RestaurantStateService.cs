@@ -5,6 +5,7 @@ using Pho.Domain.Contracts;
 using Pho.Domain.DayCycle;
 using Pho.Domain.Economy;
 using Pho.Domain.Events;
+using Pho.Domain.Multiplayer;
 using Pho.Save.Dto;
 using Pho.Save.Participation;
 using UnityEngine;
@@ -131,9 +132,21 @@ namespace Pho.Core.DayCycle
         /// </summary>
         void OnCashChanged(CashChanged evt) => _today.Record(evt.Delta, evt.Category);
 
+        /// <summary>
+        /// False on a replica client: the host owns the clock and
+        /// replicates day/phase, so a client must NOT tick its own.
+        /// Otherwise four peers advance four independent clocks off four
+        /// different deltaTimes and the day rolls over at four different
+        /// moments. The behaviour is still created and registered on every
+        /// peer, because Save and every phase reader expect to find it in
+        /// GameContext -- it just stops simulating. Defaults true so
+        /// single-player is unchanged.
+        /// </summary>
+        public bool SimulateLocally { get; set; } = true;
+
         void Update()
         {
-            if (!_bound) return;
+            if (!_bound || !SimulateLocally) return;
 
             _clock.Tick(Time.deltaTime, _cfg);
 
@@ -237,6 +250,13 @@ namespace Pho.Core.DayCycle
             var host = new GameObject(nameof(RestaurantStateServiceBehaviour));
             var behaviour = host.AddComponent<RestaurantStateServiceBehaviour>();
             behaviour.Bind(StartDay, cfg, ctx.Events);
+
+            // Registered on every peer (Save and phase readers expect it),
+            // but only the authority ticks it -- see SimulateLocally.
+            if (ctx.TryGet<ISimulationAuthority>(out var authority) && !authority.IsSimulationAuthority)
+            {
+                behaviour.SimulateLocally = false;
+            }
 
             ctx.Register<RestaurantStateServiceBehaviour>(behaviour);
 
