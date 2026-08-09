@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Pho.Core.Economy;
 using Pho.Core.Orders;
+using Pho.Core.Restaurant;
 using Pho.Domain.Contracts;
 using Pho.Domain.Events;
 using Pho.Domain.Infra;
@@ -61,6 +62,7 @@ namespace Pho.Customers
         // Optional/trailing for the same mergeability reason as there.
         OrderService _orderService;
         EconomyService _economyService;
+        CleanlinessService _cleanlinessService;
 
         bool _warnedNoPrefab;
         bool _warnedNoArchetypes;
@@ -73,7 +75,7 @@ namespace Pho.Customers
         /// forwarded verbatim to every spawned `CustomerAgent.Bind` call --
         /// see that method's doc comments for what a null value degrades to.
         /// </summary>
-        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, IGameDatabase database, IRandom rng, OrderService orderService = null, EconomyService economyService = null)
+        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, IGameDatabase database, IRandom rng, OrderService orderService = null, EconomyService economyService = null, CleanlinessService cleanlinessService = null)
         {
             _tableRegistry = registry;
             _cfg = cfg;
@@ -82,6 +84,7 @@ namespace Pho.Customers
             _rng = rng ?? new SystemRandom();
             _orderService = orderService;
             _economyService = economyService;
+            _cleanlinessService = cleanlinessService;
             _bound = true;
             _timer = 0f;
         }
@@ -126,7 +129,7 @@ namespace Pho.Customers
 
             var agent = Instantiate(customerPrefab, spawnPosition, spawnRotation);
             agent.SetWorldAnchors(entranceTransform, exitTransform);
-            agent.Bind(_tableRegistry, _cfg, _events, archetype, _rng, _orderService, _economyService);
+            agent.Bind(_tableRegistry, _cfg, _events, archetype, _rng, _orderService, _economyService, _cleanlinessService);
         }
 
         /// <summary>Weighted pick by `ICustomerArchetype.SpawnWeight`. Falls back to a uniform pick if every weight is non-positive, so a bad content config never blocks spawning entirely.</summary>

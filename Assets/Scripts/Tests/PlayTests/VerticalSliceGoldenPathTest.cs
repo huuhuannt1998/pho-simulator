@@ -9,6 +9,8 @@ using Pho.Core.DayCycle;
 using Pho.Core.Economy;
 using Pho.Core.Interaction;
 using Pho.Core.Orders;
+using Pho.Core.Progression;
+using Pho.Core.Restaurant;
 using Pho.Core.Save;
 using Pho.Domain.Contracts;
 using Pho.Domain.Cooking;
@@ -34,26 +36,18 @@ namespace Pho.PlayTests
     /// individually green while the systems still don't fit together, and
     /// this is the one thing that proves they do.
     ///
-    /// SCOPE, read before "fixing" a skipped step -- three of the sixteen
-    /// steps are deliberately not exercised, for reasons decided BEFORE this
-    /// test was written, not to make it pass:
+    /// SCOPE, read before "fixing" a skipped step -- 14 of the 16 steps are
+    /// exercised. The two that are not are an approved scope cut, not a gap:
     /// <list type="bullet">
     /// <item><b>Step 2 (buys ingredients) / Step 3 (returns to restaurant):</b>
     /// architecture.md §12's GDD-deviations table cuts the wet-market
     /// shopping trip entirely for the vertical slice ("Cut the second
     /// location... Street/market is post-VS"). InventoryService seeds
-    /// starting stock directly instead. Not a gap -- an approved scope
-    /// cut.</item>
-    /// <item><b>Step 12 (cleans):</b> architecture.md §12 reduces GDD §15's
-    /// seven dirt systems to "a single Cleanliness01 float", but no code
-    /// anywhere currently mutates RestaurantDto.cleanliness01/dirtyTableIds
-    /// -- there is no cleaning mechanic to exercise yet. A genuine gap,
-    /// left for the "fix everything" pass, not silently faked here.</item>
-    /// <item><b>Step 14 (buys one upgrade):</b> architecture.md §12
-    /// explicitly says "Keep" for this step, but no upgrade/progression
-    /// system has been built (ProgressionDto exists in the save schema;
-    /// nothing populates it). Also a genuine gap, not faked here.</item>
+    /// starting stock directly instead.</item>
     /// </list>
+    /// (Steps 12 and 14 were previously skipped for want of a cleaning
+    /// mechanic and an upgrade system respectively; both now exist and are
+    /// asserted below.)
     /// Steps 7-8 (customer spawns/orders) are driven directly through the
     /// real <see cref="OrderService"/> rather than waiting on a live
     /// NavMesh-driven <c>CustomerAgent</c> to physically walk, queue, and
@@ -187,13 +181,47 @@ namespace Pho.PlayTests
             Assert.That(orderBoard.TryGetOrder(orderId, out var ticket), Is.True, "The order never reached the order board -- OrderBoardPresenter is not bound to OrderPlaced.");
             Assert.That(ticket.State, Is.EqualTo(OrderState.Completed), "Order board should have tracked this order all the way to Completed via OrderStateChanged.");
 
-            // ---- Step 12: SKIPPED -- no cleanliness mechanic exists yet, see class doc comment. ----
+            // ---- Step 12: Player cleans. ----
+            Assert.That(ctx.TryGet<CleanlinessService>(out var cleanliness), Is.True, "No CleanlinessService registered.");
+            Assert.That(cleanliness.Cleanliness01, Is.EqualTo(1f).Within(1e-5f), "The dining room should start spotless.");
+
+            // The scene's tables self-register via their DirtyTable
+            // components, so a real table id is guaranteed to exist here.
+            const string DirtiedTable = "table.1";
+            Assert.That(cleanliness.IsKnownTable(DirtiedTable), Is.True,
+                "table.1 never registered itself -- SceneBuilder did not put a DirtyTable component on the dining tables.");
+
+            Assert.That(cleanliness.MarkDirty(DirtiedTable), Is.True);
+            Assert.That(cleanliness.Cleanliness01, Is.LessThan(1f), "Dirtying a table must lower cleanliness.");
+
+            Assert.That(cleanliness.TryClean(DirtiedTable), Is.True);
+            Assert.That(cleanliness.Cleanliness01, Is.EqualTo(1f).Within(1e-5f), "Cleaning the only dirty table must restore a spotless room.");
+            Assert.That(cleanliness.TryClean(DirtiedTable), Is.False, "Cleaning an already-clean table is a normal no-op, not a second success.");
 
             // ---- Step 13: Player closes the restaurant. ----
             restaurantState.CloseRestaurant();
             Assert.That(restaurantState.Phase, Is.EqualTo(DayPhase.Closed));
 
-            // ---- Step 14: SKIPPED -- no upgrade/progression system exists yet, see class doc comment. ----
+            // ---- Step 14: Player buys one upgrade. ----
+            Assert.That(ctx.TryGet<ProgressionService>(out var progression), Is.True, "No ProgressionService registered.");
+
+            var burner = new EquipmentId("eq.burner_commercial");
+            Assert.That(progression.IsOwned(burner), Is.False, "Nothing should be owned at the start of a new game.");
+            Assert.That(progression.CurrentModifiers.HeatRateMultiplier, Is.EqualTo(1f).Within(1e-5f), "Unupgraded equipment must be the neutral (1,1) modifier.");
+            Assert.That(progression.TryGetCost(burner, out var burnerCost), Is.True, "Could not resolve the burner's cost -- is eq.burner_commercial in the GameDatabase?");
+
+            var cashBeforeUpgrade = economy.Cash;
+            Assert.That(progression.TryPurchase(burner), Is.True, "Purchase failed despite sufficient funds.");
+
+            Assert.That(progression.IsOwned(burner), Is.True);
+            Assert.That(economy.Cash, Is.EqualTo(cashBeforeUpgrade - burnerCost), "Buying the upgrade must debit exactly its cost.");
+
+            // The progression proof that matters: owning it measurably
+            // changes gameplay, not just a string in a save file.
+            Assert.That(progression.CurrentModifiers.HeatRateMultiplier, Is.GreaterThan(1f),
+                "Owning the commercial burner must produce a faster-than-default heat rate.");
+            Assert.That(ProgressionService.CurrentModifiersOrDefault().HeatRateMultiplier, Is.GreaterThan(1f),
+                "The static seam BrothPot reads must also reflect the purchase.");
 
             // ---- Step 15: Game saves. ----
             var cashAtSaveTime = economy.Cash;

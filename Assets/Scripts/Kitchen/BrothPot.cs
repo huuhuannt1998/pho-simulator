@@ -88,7 +88,19 @@ namespace Pho.Kitchen
             if (!_bound || !_started) return;
 
             var wasReady = _state.Phase == BrothPhase.Ready;
-            var mods = new EquipmentModifiers(heatRateMultiplier, capacityMultiplier);
+
+            // Live equipment modifiers from ProgressionService -- this is
+            // what makes the eq.burner_commercial upgrade actually change
+            // gameplay (measurably faster time-to-Ready) rather than just
+            // being an owned string in a save file. Returns
+            // EquipmentModifiers.Default (1,1) when no ProgressionService is
+            // available (before bootstrap, or in a scene without one), so
+            // the pot behaves exactly as it did before this wiring existed.
+            //
+            // The serialized heatRateMultiplier/capacityMultiplier fields
+            // below are now the FALLBACK only, used when progression can't
+            // be reached -- see EffectiveModifiers.
+            var mods = EffectiveModifiers();
             BrothSimulator.Tick(ref _state, Time.deltaTime, mods, _balance);
 
             if (!wasReady && _state.Phase == BrothPhase.Ready && !_readyEventFired)
@@ -96,6 +108,25 @@ namespace Pho.Kitchen
                 _readyEventFired = true;
                 _events?.Publish(new BrothReady(_state.Quality01));
             }
+        }
+
+        /// <summary>
+        /// Owned-equipment modifiers if progression is available, otherwise
+        /// this pot's own serialized fields.
+        ///
+        /// The fallback is deliberate rather than just returning Default:
+        /// the serialized fields predate the progression system and default
+        /// to (1,1) anyway, so honouring them costs nothing and keeps a
+        /// hand-authored "this specific pot is hotter" scene tweak working
+        /// for a designer, without progression having to know about it.
+        /// </summary>
+        EquipmentModifiers EffectiveModifiers()
+        {
+            var progression = Pho.Core.Progression.ProgressionService.CurrentModifiersOrDefault();
+            if (progression.HeatRateMultiplier != 1f || progression.CapacityMultiplier != 1f)
+                return progression;
+
+            return new EquipmentModifiers(heatRateMultiplier, capacityMultiplier);
         }
 
         public string GetInteractionText(in InteractionContext ctx)

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Reflection;
 using Pho.Core;
 using Pho.Core.DayCycle;
+using Pho.Core.Progression;
+using Pho.Core.Restaurant;
 using Pho.Core.Save;
 using Pho.Customers;
 using Pho.Data;
@@ -110,6 +112,7 @@ namespace Pho.EditorTools
         const string EntranceName = "Entrance";
         const string ExitName = "Exit";
         const string RestaurantSignName = "RestaurantSign";
+        const string UpgradeStationName = "UpgradeStation";
 
         // Kitchen sits at x=+5, dining at x=-5 -- both well clear of the
         // player's spawn at (0,1,-2) and of each other. Coordinates below
@@ -176,6 +179,12 @@ namespace Pho.EditorTools
         static readonly Vector3 RestaurantSignPosition = EntrancePosition + new Vector3(1.5f, 0.9f, 0f);
         static readonly Vector3 RestaurantSignScale = new Vector3(0.3f, 1.8f, 0.3f);
 
+        // Where the player buys eq.burner_commercial. Placed in the kitchen
+        // beside the broth pot it upgrades, so the cause/effect of the
+        // purchase is physically obvious.
+        static readonly Vector3 UpgradeStationOffset = new Vector3(1.5f, 0.5f, -2f);
+        static readonly Vector3 UpgradeStationScale = new Vector3(0.7f, 1f, 0.5f);
+
         [MenuItem("Pho/Scenes/Build Boot Scene")]
         public static void BuildBootScene()
         {
@@ -193,6 +202,7 @@ namespace Pho.EditorTools
             BuildTableRegistry(seatSlots);
             BuildCustomerSpawnerAndEntranceExit();
             BuildRestaurantSign();
+            BuildUpgradeStation();
 
             // Baked LAST so the NavMesh accounts for every obstacle placed
             // above (kitchen stations, tables) rather than just the bare
@@ -215,7 +225,7 @@ namespace Pho.EditorTools
                 $"[SceneBuilder] Built '{BootScenePath}' -- ground, sun, player @ {PlayerSpawnPosition}, " +
                 $"GameBootstrap, kitchen ({IngredientStationDefs.Length} ingredient stations + broth pot + pass " +
                 $"counter + bowl stack), dining ({TableCount} tables / {seatSlots.Count} seats), " +
-                $"customer spawner + entrance/exit, restaurant sign, baked NavMesh.");
+                $"customer spawner + entrance/exit, restaurant sign, upgrade station, baked NavMesh.");
         }
 
         static void EnsureFolder()
@@ -437,6 +447,19 @@ namespace Pho.EditorTools
                 table.transform.position = new Vector3(tableWorldXZ.x, TableHalfHeight, tableWorldXZ.z);
                 table.transform.localScale = TableScale;
 
+                // DirtyTable's tableId MUST match the seat slots' tableId
+                // below -- that string is the only link between "a customer
+                // left this seat" and "this table is now dirty"
+                // (CleanlinessService keys purely on the id). It also
+                // self-registers with CleanlinessService on enable, which is
+                // what populates the denominator of the Cleanliness01
+                // fraction, so a table without this component would silently
+                // shrink the room as far as cleanliness is concerned.
+                // CreatePrimitive(Cube) already supplies the BoxCollider the
+                // player needs to aim at it.
+                var dirtyTable = table.AddComponent<DirtyTable>();
+                SetSerializedString(dirtyTable, "tableId", tableId);
+
                 for (int s = 0; s < SeatsPerTable; s++)
                 {
                     float sideSign = s == 0 ? 1f : -1f;
@@ -542,6 +565,22 @@ namespace Pho.EditorTools
             // (RestaurantSign has no [RequireComponent(typeof(Collider))],
             // but IInteractable objects need a collider to be hit at all).
             go.AddComponent<RestaurantSign>();
+        }
+
+        // ------------------------------------------------------------------
+        // Upgrade station (progression)
+        // ------------------------------------------------------------------
+
+        static void BuildUpgradeStation()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = UpgradeStationName;
+            go.transform.position = KitchenOrigin + UpgradeStationOffset;
+            go.transform.localScale = UpgradeStationScale;
+            // CreatePrimitive(Cube) supplies the BoxCollider the player needs
+            // to aim at. equipmentId keeps its own serialized default
+            // ("eq.burner_commercial") -- the single upgrade this slice has.
+            go.AddComponent<UpgradeStation>();
         }
 
         static void BakeNavMesh(GameObject ground)

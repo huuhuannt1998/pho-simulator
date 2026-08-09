@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using Pho.Core.Economy;
 using Pho.Core.Orders;
+using Pho.Core.Restaurant;
 using Pho.Domain.Contracts;
 using Pho.Domain.Customers;
 using Pho.Domain.Events;
@@ -92,6 +93,10 @@ namespace Pho.Customers
         // exactly this.
         EconomyService _economyService;
 
+        // Injected by Bind(...). Same null-safe convention as the two above.
+        // Used only by MarkClaimedTableDirty -- see that method.
+        CleanlinessService _cleanlinessService;
+
         // See the SEAT-HANDLE INTEGRATION GAP note in the class doc comment.
         TableRegistry.SeatId _claimedSeatId = TableRegistry.SeatId.Invalid;
         bool _hasClaimedSeat;
@@ -135,7 +140,12 @@ namespace Pho.Customers
         /// instead of only logging. Trailing/optional for the same
         /// mergeability reason as `orderService`. Null-safe.
         /// </param>
-        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, ICustomerArchetype archetype, IRandom rng, OrderService orderService = null, EconomyService economyService = null)
+        /// <param name="cleanlinessService">
+        /// Optional -- lets a departing customer leave their table dirty
+        /// (see <c>MarkClaimedTableDirty</c>). Trailing/optional for the
+        /// same mergeability reason as the two parameters above. Null-safe.
+        /// </param>
+        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, ICustomerArchetype archetype, IRandom rng, OrderService orderService = null, EconomyService economyService = null, CleanlinessService cleanlinessService = null)
         {
             _tableRegistry = registry;
             _cfg = cfg;
@@ -144,6 +154,7 @@ namespace Pho.Customers
             _rng = rng ?? new SystemRandom();
             _orderService = orderService;
             _economyService = economyService;
+            _cleanlinessService = cleanlinessService;
 
             _customerId = new CustomerId(Guid.NewGuid().ToString());
             _brain = new CustomerBrain(_customerId, _archetype, _cfg, _events, _rng);
@@ -242,9 +253,36 @@ namespace Pho.Customers
         {
             if (!_hasClaimedSeat) return;
 
+            MarkClaimedTableDirty();
+
             _tableRegistry?.ReleaseSeat(_claimedSeatId);
             _hasClaimedSeat = false;
             _claimedSeatId = TableRegistry.SeatId.Invalid;
+        }
+
+        /// <summary>
+        /// "Customer got up -> their table now needs bussing" -- the one
+        /// gameplay source of dirt in the vertical slice (architecture.md
+        /// §12 reduces GDD §15's seven dirt systems to dirty tables alone).
+        /// Called from both seat-release paths (<see cref="ReleaseSeat"/> and
+        /// <see cref="Despawn"/>) BEFORE the seat id is cleared, since the
+        /// table id is resolved from that id.
+        ///
+        /// Deliberately fires for ANY customer who actually occupied a seat,
+        /// including one who left angry without being served: they still sat
+        /// at the table. A customer who never got a seat (gave up while
+        /// queuing) never reaches here, which is correct.
+        ///
+        /// Null-safe: with no CleanlinessService bound this is a silent
+        /// no-op, matching this class's established degrade-gracefully
+        /// convention for every optional dependency.
+        /// </summary>
+        void MarkClaimedTableDirty()
+        {
+            if (_cleanlinessService == null || !_hasClaimedSeat || _tableRegistry == null) return;
+            if (!_tableRegistry.TryGetTableId(_claimedSeatId, out var tableId)) return;
+
+            _cleanlinessService.MarkDirty(tableId);
         }
 
         /// <summary>REAL: converts the pure Vec3 to a Unity Vector3 and drives the NavMeshAgent.</summary>
@@ -406,6 +444,14 @@ namespace Pho.Customers
         {
             if (_hasClaimedSeat)
             {
+                // Same "they sat here, so it needs bussing" rule as
+                // ReleaseSeat -- a customer despawning straight from a seat
+                // (without a prior ReleaseSeat) must still leave the table
+                // dirty. MarkClaimedTableDirty is safe to reach twice: the
+                // underlying CleanlinessModel.MarkDirty is idempotent per
+                // table id.
+                MarkClaimedTableDirty();
+
                 _tableRegistry?.ReleaseSeat(_claimedSeatId);
                 _hasClaimedSeat = false;
                 _claimedSeatId = TableRegistry.SeatId.Invalid;

@@ -1,6 +1,7 @@
 using System.Reflection;
 using Pho.Core.Economy;
 using Pho.Core.Orders;
+using Pho.Core.Restaurant;
 using Pho.Domain.Contracts;
 using UnityEngine;
 
@@ -65,6 +66,7 @@ namespace Pho.Core.Customers
             ctx.TryGet<IGameDatabase>(out var database);
             ctx.TryGet<OrderService>(out var orderService);
             ctx.TryGet<EconomyService>(out var economyService);
+            ctx.TryGet<CleanlinessService>(out var cleanlinessService);
 
             var method = spawner.GetType().GetMethod(BindMethodName, BindingFlags.Public | BindingFlags.Instance);
             if (method == null)
@@ -73,7 +75,7 @@ namespace Pho.Core.Customers
                 return;
             }
 
-            method.Invoke(spawner, new object[] { tableRegistry, balance, ctx.Events, database, null, orderService, economyService });
+            method.Invoke(spawner, new object[] { tableRegistry, balance, ctx.Events, database, null, orderService, economyService, cleanlinessService });
             Debug.Log("[CustomerBindInstaller] Bound CustomerSpawner.");
         }
     }
