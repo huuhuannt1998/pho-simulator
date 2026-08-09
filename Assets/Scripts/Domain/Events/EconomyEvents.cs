@@ -4,7 +4,18 @@ namespace Pho.Domain.Events
     // advertising, taxes, or catering categories yet.
     public enum LedgerCategory
     {
-        Sale, IngredientPurchase, Rent, Equipment, Tip, Other
+        Sale, IngredientPurchase, Rent, Equipment, Tip, Other,
+
+        // APPENDED, never inserted -- new members go on the end so every
+        // existing ordinal keeps its value.
+        //
+        // Property is separate from Equipment because the expansion system
+        // buys BUILDINGS: without it a $6,000 unit and a $450 burner land in
+        // the same bucket, and the first thing anyone asks of a daily report
+        // is "where did the money actually go". Both are capital purchases,
+        // so DayLedgerAccumulator ignores this exactly as it ignores
+        // Equipment -- it is a reporting distinction, not a P&L one.
+        Property,
     }
 
     public readonly struct CashChanged : IGameEvent

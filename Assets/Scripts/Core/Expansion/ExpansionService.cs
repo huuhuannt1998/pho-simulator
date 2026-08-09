@@ -102,13 +102,12 @@ namespace Pho.Core.Expansion
     /// assuming "the local player decided".
     ///
     /// <b>LEDGER CATEGORY:</b> purchases post as
-    /// <see cref="LedgerCategory.Equipment"/>. That enum is frozen M1
-    /// contract surface and is not this pass's to extend, so a dedicated
-    /// <c>Property</c>/<c>Expansion</c> category is flagged in the report
-    /// rather than added. Equipment is the least-wrong existing member --
-    /// both are voluntary capital purchases -- but the daily report will
-    /// bucket a $6,000 building alongside a $450 burner. Worth one enum
-    /// member at the next integration pass.
+    /// <see cref="LedgerCategory.Property"/>, added at integration for
+    /// exactly this: bucketing a $6,000 building with a $450 burner would
+    /// make the daily report useless for the first question anyone asks of
+    /// it. Both are capital purchases, so DayLedgerAccumulator ignores
+    /// Property exactly as it ignores Equipment -- the split is a reporting
+    /// distinction, not a P&amp;L one.
     /// </summary>
     [AutoInstall]
     public sealed class ExpansionService : IInstaller, ISaveParticipant
@@ -364,7 +363,7 @@ namespace Pho.Core.Expansion
 
             if (price > 0m)
             {
-                _economy.Debit(price, LedgerCategory.Equipment);
+                _economy.Debit(price, LedgerCategory.Property);
             }
 
             _events?.Publish(new LotPurchased(request.Lot, price, request.RequestedBy, Model.OwnedCount));
