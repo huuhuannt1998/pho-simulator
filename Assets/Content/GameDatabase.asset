@@ -24,4 +24,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0a6aaf25851a04a5a94fd0bc7f45ca67, type: 2}
   equipment:
   - {fileID: 11400000, guid: e5ddf61d7fac347d39e6e365dff598c3, type: 2}
-  archetypes: []
+  archetypes:
+  - {fileID: 11400000, guid: a6e4c2badb7284832af79c05f8dc9822, type: 2}
+  - {fileID: 11400000, guid: ac13e90feacbe4c9582e6b72367f7c5f, type: 2}

@@ -45,6 +45,11 @@ namespace Pho.Player
         InputAction _lookAction;
         InputAction _sprintAction;
 
+        // Beta usability: with the cursor locked and no pause menu, a
+        // standalone build otherwise traps the pointer with no way out.
+        // Escape releases it (press again, or click, to recapture).
+        InputAction _releaseCursorAction;
+
         float _pitch;
         float _verticalVelocity;
 
@@ -60,6 +65,7 @@ namespace Pho.Player
                 .With("Right", "<Keyboard>/d");
 
             _lookAction = new InputAction(name: "Look", type: InputActionType.Value, binding: "<Mouse>/delta");
+            _releaseCursorAction = new InputAction(name: "ReleaseCursor", type: InputActionType.Button, binding: "<Keyboard>/escape");
             _sprintAction = new InputAction(name: "Sprint", type: InputActionType.Button, binding: "<Keyboard>/leftShift");
         }
 
@@ -68,6 +74,7 @@ namespace Pho.Player
             _moveAction.Enable();
             _lookAction.Enable();
             _sprintAction.Enable();
+            _releaseCursorAction.Enable();
 
             if (lockCursorOnEnable)
             {
@@ -81,6 +88,7 @@ namespace Pho.Player
             _moveAction.Disable();
             _lookAction.Disable();
             _sprintAction.Disable();
+            _releaseCursorAction.Disable();
         }
 
         void OnDestroy()
@@ -88,16 +96,44 @@ namespace Pho.Player
             _moveAction?.Dispose();
             _lookAction?.Dispose();
             _sprintAction?.Dispose();
+            _releaseCursorAction?.Dispose();
         }
 
         void Update()
         {
+            UpdateCursorLock();
             ApplyLook();
             ApplyMove();
         }
 
+        /// <summary>
+        /// Escape releases the pointer; clicking recaptures it. Mouse-look is
+        /// suppressed while released, so the camera doesn't lurch when the
+        /// player moves the free cursor across the window.
+        /// </summary>
+        void UpdateCursorLock()
+        {
+            if (_releaseCursorAction.WasPerformedThisFrame())
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+                return;
+            }
+
+            if (Cursor.lockState != CursorLockMode.Locked
+                && Mouse.current != null
+                && Mouse.current.leftButton.wasPressedThisFrame)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
+        }
+
         void ApplyLook()
         {
+            // Don't steer the camera with a released pointer.
+            if (Cursor.lockState != CursorLockMode.Locked) return;
+
             var delta = _lookAction.ReadValue<Vector2>();
             if (delta.sqrMagnitude <= 0f) return;
 

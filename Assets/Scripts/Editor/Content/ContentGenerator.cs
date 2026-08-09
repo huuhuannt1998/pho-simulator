@@ -43,10 +43,14 @@ namespace Pho.EditorTools.Content
             var equipment = BuildEquipment();
             var balance = BuildBalanceConfig();
 
-            // No archetype content authored yet -- see ContentManifest's
+            // PLACEHOLDER REMOVED: archetypes are now authored -- see
+            // ContentManifest.Archetypes for why an empty list was a
+            // playability blocker (CustomerSpawner spawns nothing without
+            // them).
+            // Previously: no archetype content authored yet -- see ContentManifest's
             // scope note. The folder is still created so a later agent has a
             // place to drop generated assets without touching this script.
-            var archetypes = System.Array.Empty<CustomerArchetype>();
+            var archetypes = BuildArchetypes();
 
             BuildGameDatabase(ingredients, recipes, equipment, archetypes);
 
@@ -147,6 +151,23 @@ namespace Pho.EditorTools.Content
                 b.spoilageRatePerHour, b.dayLengthSeconds, b.rentAmount, b.rentIntervalDays);
             EditorUtility.SetDirty(asset);
             return asset;
+        }
+
+        static CustomerArchetype[] BuildArchetypes()
+        {
+            var results = new List<CustomerArchetype>(ContentManifest.Archetypes.Length);
+            foreach (var a in ContentManifest.Archetypes)
+            {
+                var asset = LoadOrCreate<CustomerArchetype>($"{ArchetypesFolder}/{a.id}.asset");
+                asset.EditorInit(
+                    a.id, a.displayName, a.spawnWeight, a.patienceSeconds, a.budget,
+                    a.qualityExpectation01, a.cleanlinessSensitivity01, a.serviceSensitivity01,
+                    a.priceSensitivity01, a.tipChance01, a.tipFraction, a.reviewChance01,
+                    a.preferredRecipeIds, a.eatDurationSeconds, a.visualVariantIndex);
+                EditorUtility.SetDirty(asset);
+                results.Add(asset);
+            }
+            return results.ToArray();
         }
 
         static void BuildGameDatabase(

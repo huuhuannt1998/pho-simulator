@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Pho.Core.Economy;
@@ -64,6 +65,16 @@ namespace Pho.Customers
         EconomyService _economyService;
         CleanlinessService _cleanlinessService;
 
+        // Customers must only arrive while the restaurant is OPEN.
+        // Without this gate the spawner ran purely on its timer, so
+        // customers walked in during Prep while the player was still
+        // simmering broth (~100s) -- they would burn their 45-75s patience
+        // and leave angry before it was even possible to serve them, which
+        // reads as a broken game rather than a hard one. Mirrors how
+        // CustomerAgent already tracks the same two events.
+        readonly List<IDisposable> _subscriptions = new List<IDisposable>();
+        bool _restaurantOpen;
+
         bool _warnedNoPrefab;
         bool _warnedNoArchetypes;
 
@@ -87,11 +98,42 @@ namespace Pho.Customers
             _cleanlinessService = cleanlinessService;
             _bound = true;
             _timer = 0f;
+
+            // Idempotent re-bind, same reasoning as
+            // RestaurantStateServiceBehaviour.Bind: never stack duplicate
+            // subscriptions.
+            DisposeSubscriptions();
+            if (_events != null)
+            {
+                _subscriptions.Add(_events.Subscribe<RestaurantOpened>(_ => OnRestaurantOpened()));
+                _subscriptions.Add(_events.Subscribe<RestaurantClosed>(_ => _restaurantOpen = false));
+            }
+        }
+
+        void OnRestaurantOpened()
+        {
+            _restaurantOpen = true;
+
+            // Reset so the first customer arrives a full interval after
+            // opening, rather than instantly because the timer had been
+            // free-running through Prep.
+            _timer = 0f;
+        }
+
+        void OnDestroy() => DisposeSubscriptions();
+
+        void DisposeSubscriptions()
+        {
+            foreach (var sub in _subscriptions) sub.Dispose();
+            _subscriptions.Clear();
         }
 
         void Update()
         {
             if (!_bound) return;
+
+            // No arrivals while closed -- see the _restaurantOpen field note.
+            if (!_restaurantOpen) return;
 
             _timer += Time.deltaTime;
             if (_timer < spawnIntervalSeconds) return;

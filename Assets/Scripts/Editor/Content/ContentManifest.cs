@@ -55,6 +55,25 @@ namespace Pho.EditorTools.Content
             public float qualityBonus01;
         }
 
+        public struct ArchetypeEntry
+        {
+            public string id;
+            public string displayName;
+            public float spawnWeight;
+            public FloatRange patienceSeconds;
+            public FloatRange budget;
+            public float qualityExpectation01;
+            public float cleanlinessSensitivity01;
+            public float serviceSensitivity01;
+            public float priceSensitivity01;
+            public float tipChance01;
+            public float tipFraction;
+            public float reviewChance01;
+            public string[] preferredRecipeIds;
+            public FloatRange eatDurationSeconds;
+            public int visualVariantIndex;
+        }
+
         public struct BalanceConfigEntry
         {
             public float patienceDecayRate;
@@ -260,6 +279,64 @@ namespace Pho.EditorTools.Content
         // wrong); ExtraUnwanted is cheapest (an extra pinch of garnish is a
         // minor ding), matching the doc's "garnish slots are cheap, protein
         // slots are expensive" guidance for RecipeMatcher severity scaling.
+
+        // TWO archetypes, per architecture.md section 12's explicit "Same for
+        // archetypes: 2 first, then expand." They are deliberately opposites
+        // along the axes SatisfactionCalculator actually reads, so the
+        // difference is legible in play rather than being two near-identical
+        // stat blocks: the office worker is time-pressured and forgiving
+        // about quality, the food critic is patient and unforgiving.
+        //
+        // WHY THIS EXISTS AT ALL: until these were authored, GameDatabase
+        // shipped `archetypes: []`, and CustomerSpawner.TrySpawn bails with a
+        // warning when the archetype list is empty -- so NO CUSTOMER EVER
+        // SPAWNED in play. Steps 7-11 of the GDD section 55 loop (customer
+        // arrives, orders, is served, pays, player earns) were unreachable by
+        // a human, even though the golden-path test stayed green by driving
+        // OrderService directly.
+        //
+        // Budgets are set against the two recipes' BasePrice (8.50 / 8.00)
+        // so a normally-priced bowl is affordable for both, and
+        // PriceSensitivity only bites if prices rise later.
+        public static readonly ArchetypeEntry[] Archetypes =
+        {
+            new ArchetypeEntry
+            {
+                id = "arc.office_worker",
+                displayName = "Office Worker",
+                spawnWeight = 3f,               // the common case -- 3:1 against the critic
+                patienceSeconds = new FloatRange(45f, 75f),   // on a lunch break
+                budget = new FloatRange(9f, 14f),
+                qualityExpectation01 = 0.5f,    // wants lunch, not perfection
+                cleanlinessSensitivity01 = 0.3f,
+                serviceSensitivity01 = 0.8f,    // speed is what they care about
+                priceSensitivity01 = 0.6f,
+                tipChance01 = 0.35f,
+                tipFraction = 0.10f,
+                reviewChance01 = 0.05f,
+                preferredRecipeIds = new[] { "rec.pho_tai", "rec.pho_chin" },
+                eatDurationSeconds = new FloatRange(35f, 55f),
+                visualVariantIndex = 0,
+            },
+            new ArchetypeEntry
+            {
+                id = "arc.food_critic",
+                displayName = "Food Critic",
+                spawnWeight = 1f,
+                patienceSeconds = new FloatRange(90f, 140f),  // will wait for a good bowl
+                budget = new FloatRange(15f, 25f),
+                qualityExpectation01 = 0.85f,   // the whole point of this archetype
+                cleanlinessSensitivity01 = 0.9f,
+                serviceSensitivity01 = 0.4f,
+                priceSensitivity01 = 0.2f,      // pays for quality
+                tipChance01 = 0.7f,
+                tipFraction = 0.20f,
+                reviewChance01 = 0.9f,
+                preferredRecipeIds = new[] { "rec.pho_tai" },
+                eatDurationSeconds = new FloatRange(70f, 110f),
+                visualVariantIndex = 1,
+            },
+        };
 
         public static readonly BalanceConfigEntry Balance = new BalanceConfigEntry
         {

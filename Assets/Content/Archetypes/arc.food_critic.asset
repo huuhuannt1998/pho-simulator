@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ebdca65fc24c4ce2ad5657d12870185, type: 3}
+  m_Name: arc.food_critic
+  m_EditorClassIdentifier: Pho.Data::Pho.Data.CustomerArchetype
+  id: arc.food_critic
+  displayName: Food Critic
+  spawnWeight: 1
+  patienceSeconds:
+    min: 90
+    max: 140
+  budget:
+    min: 15
+    max: 25
+  qualityExpectation01: 0.85
+  cleanlinessSensitivity01: 0.9
+  serviceSensitivity01: 0.4
+  priceSensitivity01: 0.2
+  tipChance01: 0.7
+  tipFraction: 0.2
+  reviewChance01: 0.9
+  preferredRecipeIds:
+  - rec.pho_tai
+  eatDurationSeconds:
+    min: 70
+    max: 110
+  visualVariantIndex: 1

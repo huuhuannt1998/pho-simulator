@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ebdca65fc24c4ce2ad5657d12870185, type: 3}
+  m_Name: arc.office_worker
+  m_EditorClassIdentifier: Pho.Data::Pho.Data.CustomerArchetype
+  id: arc.office_worker
+  displayName: Office Worker
+  spawnWeight: 3
+  patienceSeconds:
+    min: 45
+    max: 75
+  budget:
+    min: 9
+    max: 14
+  qualityExpectation01: 0.5
+  cleanlinessSensitivity01: 0.3
+  serviceSensitivity01: 0.8
+  priceSensitivity01: 0.6
+  tipChance01: 0.35
+  tipFraction: 0.1
+  reviewChance01: 0.05
+  preferredRecipeIds:
+  - rec.pho_tai
+  - rec.pho_chin
+  eatDurationSeconds:
+    min: 35
+    max: 55
+  visualVariantIndex: 0
