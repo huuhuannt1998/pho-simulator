@@ -66,13 +66,25 @@ namespace Pho.EditorTools
         // Default Plane primitive is 10x10 Unity units at scale (1,1,1);
         // scaled to (10,1,10) that's a 100x100 walkable floor -- plenty of
         // room, no real art needed yet.
-        static readonly Vector3 GroundScale = new Vector3(10f, 1f, 10f);
+        // Sized to the shophouse interior (6.74 x 11.32m, see ShophouseShell)
+        // rather than the old 100x100m plane. A Plane primitive is 10x10 at
+        // scale 1, so 0.8 x 1.2 gives 8 x 12m -- slightly larger than the
+        // interior so the collider extends under the walls with no gap at the
+        // skirting. Its RENDERER is switched off when the shell model exists
+        // (the shell has its own floor); it stays purely as the walk surface
+        // and the NavMesh source.
+        static readonly Vector3 GroundScale = new Vector3(0.8f, 1f, 1.2f);
 
         // Default CharacterController is height 2, radius 0.5, center
         // (0,0,0) local -- so the capsule extends from local y=-1 to y=+1.
         // Spawning the root at world y=1 rests the capsule's feet exactly
         // on the ground plane (world y=0).
-        static readonly Vector3 PlayerSpawnPosition = new Vector3(0f, 1f, -2f);
+        // Just inside the shutter, facing down the length of the shop.
+        // Entrance is at +Z (measured from the imported shell), so the player
+        // must be rotated 180 degrees to look INTO the room rather than out
+        // at the street.
+        static readonly Vector3 PlayerSpawnPosition = new Vector3(0f, 1f, 3.8f);
+        const float PlayerSpawnYaw = 180f;
         const float CameraPivotLocalHeight = 0.7f; // ~eye height within the capsule
 
         // NavMeshSurface lives in the com.unity.ai.navigation package's
@@ -117,22 +129,31 @@ namespace Pho.EditorTools
         // Kitchen sits at x=+5, dining at x=-5 -- both well clear of the
         // player's spawn at (0,1,-2) and of each other. Coordinates below
         // are the exact anchors suggested by the brief.
-        static readonly Vector3 KitchenOrigin = new Vector3(5f, 0f, 0f);
-        static readonly Vector3 DiningOrigin = new Vector3(-5f, 0f, 0f);
+        // LAYOUT (Unity space, derived from the imported ShophouseShell's
+        // measured bounds: X +/-3.37, Z -5.88..+5.44, entrance at +Z).
+        // Kitchen occupies the back of the shop, dining the middle, and the
+        // player enters from the street at +Z -- so the cook->serve walk runs
+        // down the long axis, which is the whole point of the tube-house
+        // proportion.
+        static readonly Vector3 KitchenOrigin = new Vector3(0f, 0f, -4.1f);
+        static readonly Vector3 DiningOrigin = new Vector3(0f, 0f, 0.6f);
 
-        static readonly Vector3 BrothPotOffset = new Vector3(0f, 0.5f, -2f);
+        static readonly Vector3 BrothPotOffset = new Vector3(-2.05f, 0f, -0.7f);
         static readonly Vector3 BrothPotScale = new Vector3(0.8f, 0.5f, 0.8f);
 
-        static readonly Vector3 PassCounterOffset = new Vector3(-3f, 0.5f, 0f);
+        // The pass sits on the kitchen/dining boundary -- the counter the
+        // player reaches across to hand a finished bowl out.
+        static readonly Vector3 PassCounterOffset = new Vector3(1.2f, 0f, 1.7f);
         static readonly Vector3 PassCounterScale = new Vector3(1.5f, 1f, 0.8f);
 
-        static readonly Vector3 BowlStackOffset = new Vector3(-3f, 0.05f, 1.5f);
+        // On top of the pass counter (its surface measures 0.99m).
+        static readonly Vector3 BowlStackOffset = new Vector3(-0.1f, 0.99f, 1.7f);
         const int BowlStackCount = 4;
         const float BowlStackSpacing = 0.15f;
 
-        const float IngredientStationSpacing = 1.5f;
-        const float IngredientStationRowOffsetZ = 2.5f;
-        static readonly Vector3 IngredientStationScale = new Vector3(0.8f, 0.6f, 0.8f);
+        const float IngredientStationSpacing = 0.95f;
+        const float IngredientStationRowOffsetZ = 0.55f;
+        static readonly Vector3 IngredientStationScale = new Vector3(0.34f, 0.22f, 0.29f);
 
         // One IngredientStation per ContentManifest ingredient ID (6 total,
         // per the brief). Slot assignments mirror ContentManifest's
@@ -161,28 +182,32 @@ namespace Pho.EditorTools
         static readonly Vector3 TableScale = new Vector3(1.2f, 0.75f, 1.2f);
         const float TableHalfHeight = 0.375f;
         const float SeatSideOffset = 0.9f;
+        // Two columns either side of a central aisle. Tables are 0.8m and
+        // the room is 6.74m internally, so +/-1.65 leaves a ~1.7m aisle down
+        // the middle and ~1.2m behind each stool row against the walls.
         static readonly Vector3[] TableOffsets =
         {
-            new Vector3(-2f, 0f, -2f),
-            new Vector3(2f, 0f, -2f),
-            new Vector3(-2f, 0f, 2f),
-            new Vector3(2f, 0f, 2f),
+            new Vector3(-1.65f, 0f, -0.9f),
+            new Vector3(1.65f, 0f, -0.9f),
+            new Vector3(-1.65f, 0f, 1.9f),
+            new Vector3(1.65f, 0f, 1.9f),
         };
 
-        static readonly Vector3 EntrancePosition = DiningOrigin + new Vector3(0f, 0f, 4f);
-        static readonly Vector3 ExitPosition = DiningOrigin + new Vector3(-4f, 0f, 4f);
+        // Out on the pavement, beyond the threshold (+Z is the street).
+        static readonly Vector3 EntrancePosition = new Vector3(0f, 0f, 5.9f);
+        static readonly Vector3 ExitPosition = new Vector3(-1.6f, 0f, 6.4f);
 
         // Grey-box post beside the entrance -- the one physical object that
         // lets the player open/close the restaurant (RestaurantSign,
         // Pho.Core.DayCycle). Offset to the side of EntrancePosition so it
         // doesn't sit on top of the customer spawn point/entrance transform.
-        static readonly Vector3 RestaurantSignPosition = EntrancePosition + new Vector3(1.5f, 0.9f, 0f);
-        static readonly Vector3 RestaurantSignScale = new Vector3(0.3f, 1.8f, 0.3f);
+        static readonly Vector3 RestaurantSignPosition = new Vector3(2.55f, 0f, 4.5f);
+        static readonly Vector3 RestaurantSignScale = new Vector3(0.35f, 1.9f, 0.35f);
 
         // Where the player buys eq.burner_commercial. Placed in the kitchen
         // beside the broth pot it upgrades, so the cause/effect of the
         // purchase is physically obvious.
-        static readonly Vector3 UpgradeStationOffset = new Vector3(1.5f, 0.5f, -2f);
+        static readonly Vector3 UpgradeStationOffset = new Vector3(2.9f, 0f, 1.6f);
         static readonly Vector3 UpgradeStationScale = new Vector3(0.7f, 1f, 0.5f);
 
         [MenuItem("Pho/Scenes/Build Boot Scene")]
@@ -324,6 +349,8 @@ namespace Pho.EditorTools
             ground.name = GroundName;
             ground.transform.position = Vector3.zero;
             ground.transform.localScale = GroundScale;
+
+            BuildShophouse(ground);
             // CreatePrimitive(Plane) already adds a MeshCollider -- walkable
             // out of the box. No physics layer scheme exists yet (see
             // PlayerInteractor's own "Interactable" layer mask comment), so
@@ -344,9 +371,67 @@ namespace Pho.EditorTools
         //     warm key against cool fill is the whole trick.
         //  3. Warm point lights over the seating and the kitchen pass, which
         //     is what actually sells "small restaurant at night".
-        static readonly Color WarmKey = new Color(1.0f, 0.89f, 0.72f);
-        static readonly Color WarmLamp = new Color(1.0f, 0.82f, 0.58f);
-        static readonly Color CoolAmbient = new Color(0.32f, 0.36f, 0.45f);
+        // TUNED AGAINST ACTUAL IN-ENGINE RENDERS, not guessed. The first
+        // pass (key 1.6, lamps at intensity 14, dim ambient) blew the ceiling
+        // out to white while leaving the floor dim, and washed the whole room
+        // to orange mud -- the shell's teal wainscot and terracotta skirting
+        // were completely invisible. Interiors need far more ambient fill and
+        // far weaker practicals than an exterior does.
+        static readonly Color WarmKey = new Color(1.0f, 0.94f, 0.86f);
+        static readonly Color WarmLamp = new Color(1.0f, 0.88f, 0.72f);
+        // NEUTRAL, not blue. A blue-tinted ambient multiplied against the
+        // shell's warm cream/terracotta albedo cancels almost exactly to
+        // grey, which is why the room rendered monochrome even though every
+        // material was verifiably correct. Indoors the ambient term is also
+        // the DOMINANT light (the directional key is blocked by the walls),
+        // so it must stay modest or it washes all colour out.
+        static readonly Color CoolAmbient = new Color(0.20f, 0.19f, 0.18f);
+
+        /// <summary>
+        /// Instantiates the shophouse interior. All three architectural
+        /// pieces share ONE world-origin frame (unlike the furniture assets,
+        /// which each carry a floor-contact origin) -- see the coordinate
+        /// contract at the top of art/blender/shophouse.py -- so they are all
+        /// placed at the same transform and assemble correctly.
+        ///
+        /// The shell also carries the collision for the walls, and the ground
+        /// plane's RENDERER is switched off because the shell brings its own
+        /// tiled floor. The plane stays as the walk surface and the NavMesh
+        /// source: a flat quad bakes a far cleaner NavMesh than the shell's
+        /// full interior mesh would.
+        /// </summary>
+        static void BuildShophouse(GameObject ground)
+        {
+            var shell = ArtModel("ShophouseShell");
+            if (shell == null)
+            {
+                Debug.LogWarning("[SceneBuilder] No ShophouseShell model -- leaving the bare ground plane visible. Run the Blender art pipeline.");
+                return;
+            }
+
+            foreach (var piece in new[] { "ShophouseShell", "ShophouseShutter", "ShophouseThreshold" })
+            {
+                var model = ArtModel(piece);
+                if (model == null) continue;
+
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                instance.name = piece;
+                instance.transform.position = Vector3.zero;
+
+                // Walls must stop the player. A non-convex MeshCollider is
+                // correct here: this is static level geometry, never a
+                // rigidbody, which is the one case Unity allows it.
+                foreach (var filter in instance.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    var mc = filter.gameObject.AddComponent<MeshCollider>();
+                    mc.sharedMesh = filter.sharedMesh;
+                    mc.convex = false;
+                }
+            }
+
+            var renderer = ground.GetComponent<MeshRenderer>();
+            if (renderer != null) renderer.enabled = false;
+        }
 
         static void BuildSun()
         {
@@ -358,17 +443,21 @@ namespace Pho.EditorTools
 
             var light = sunGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.6f;
+            light.intensity = 0.55f;
             light.color = WarmKey;
             light.shadows = LightShadows.Soft;
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = CoolAmbient;
-            RenderSettings.ambientEquatorColor = CoolAmbient * 0.7f;
-            RenderSettings.ambientGroundColor = new Color(0.12f, 0.10f, 0.09f);
+            RenderSettings.ambientEquatorColor = CoolAmbient * 0.85f;
+            RenderSettings.ambientGroundColor = new Color(0.10f, 0.09f, 0.08f);
 
-            BuildLamp("Lamp_Dining", DiningOrigin + new Vector3(0f, 2.6f, 0f), range: 9f, intensity: 14f);
-            BuildLamp("Lamp_Kitchen", KitchenOrigin + new Vector3(0f, 2.6f, 0f), range: 9f, intensity: 12f);
+            // Hung just under the 3.3m ceiling, spaced down the long axis so
+            // the room is evenly lit end to end rather than having two hot
+            // pools and a dark middle.
+            BuildLamp("Lamp_Front", new Vector3(0f, 2.9f, 3.2f), range: 9f, intensity: 5.0f);
+            BuildLamp("Lamp_Dining", new Vector3(0f, 2.9f, 0.4f), range: 9f, intensity: 5.5f);
+            BuildLamp("Lamp_Kitchen", new Vector3(0f, 2.9f, -3.4f), range: 9f, intensity: 6.0f);
         }
 
         static void BuildLamp(string name, Vector3 position, float range, float intensity)
@@ -391,6 +480,7 @@ namespace Pho.EditorTools
         {
             var player = new GameObject(PlayerName);
             player.transform.position = PlayerSpawnPosition;
+            player.transform.rotation = Quaternion.Euler(0f, PlayerSpawnYaw, 0f);
 
             // CharacterController defaults (height 2, radius 0.5, center
             // (0,0,0)) are fine for a vertical-slice human capsule.
@@ -476,6 +566,7 @@ namespace Pho.EditorTools
         static void BuildKitchenArea()
         {
             BuildBrothPot();
+            BuildStove();
             BuildIngredientStations();
             BuildPassCounter();
             BuildBowlStack();
@@ -483,38 +574,61 @@ namespace Pho.EditorTools
 
         static void BuildBrothPot()
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            go.name = BrothPotName;
-            go.transform.position = KitchenOrigin + BrothPotOffset;
-            go.transform.localScale = BrothPotScale;
-            // CreatePrimitive(Cylinder) already adds a Collider (a
-            // CapsuleCollider, per Unity's built-in primitive setup) --
-            // satisfies BrothPot's [RequireComponent(typeof(Collider))]
-            // with zero extra wiring. BrothPot needs no field configuration
-            // beyond its own in-class defaults per the brief.
+            var go = BuildProp(BrothPotName, "BrothPot", KitchenOrigin + BrothPotOffset,
+                               new Vector3(0.8f, 0.9f, 0.7f), PrimitiveType.Cylinder);
             go.AddComponent<BrothPot>();
+        }
+
+        /// <summary>Decorative stove beside the pot -- no gameplay component, purely to fill the kitchen line.</summary>
+        static void BuildStove()
+        {
+            var model = ArtModel("Stove");
+            if (model == null) return;
+
+            var stove = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            stove.name = "Stove";
+            stove.transform.position = KitchenOrigin + new Vector3(-0.9f, 0f, -0.7f);
+            foreach (var c in stove.GetComponentsInChildren<Collider>(true))
+                UnityEngine.Object.DestroyImmediate(c);
         }
 
         static void BuildIngredientStations()
         {
             int n = IngredientStationDefs.Length;
             float centerIndex = (n - 1) / 2f;
+            float rowZ = KitchenOrigin.z + IngredientStationRowOffsetZ;
+
+            // Counter run underneath the bins. Four 1.6m counters cover the
+            // width of the station row so the bins have something to stand on
+            // rather than floating at counter height over bare floor.
+            var counterModel = ArtModel("KitchenCounter");
+            if (counterModel != null)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    var counter = (GameObject)PrefabUtility.InstantiatePrefab(counterModel);
+                    counter.name = $"KitchenCounter_{i + 1}";
+                    counter.transform.position = new Vector3(-2.4f + i * 1.6f, 0f, rowZ);
+                    foreach (var c in counter.GetComponentsInChildren<Collider>(true))
+                        UnityEngine.Object.DestroyImmediate(c);
+                }
+            }
+
+            // KitchenCounter's measured surface height -- the bins sit ON it,
+            // so this is their floor-contact plane.
+            const float CounterTopY = 0.99f;
 
             for (int i = 0; i < n; i++)
             {
                 var def = IngredientStationDefs[i];
+                float x = (i - centerIndex) * IngredientStationSpacing;
 
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                go.name = $"IngredientStation_{def.id}";
-                go.transform.localScale = IngredientStationScale;
+                var go = BuildProp(
+                    $"IngredientStation_{def.id}",
+                    "IngredientBin",
+                    new Vector3(x, CounterTopY, rowZ),
+                    IngredientStationScale);
 
-                float x = KitchenOrigin.x + (i - centerIndex) * IngredientStationSpacing;
-                float y = IngredientStationScale.y * 0.5f;
-                float z = KitchenOrigin.z + IngredientStationRowOffsetZ;
-                go.transform.position = new Vector3(x, y, z);
-
-                // CreatePrimitive(Cube) already adds a BoxCollider --
-                // satisfies IngredientStation's [RequireComponent(typeof(Collider))].
                 var station = go.AddComponent<IngredientStation>();
                 SetSerializedString(station, "ingredientId", def.id);
                 SetSerializedEnum(station, "slot", def.slot);
@@ -525,14 +639,8 @@ namespace Pho.EditorTools
 
         static void BuildPassCounter()
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = PassCounterName;
-            go.transform.position = KitchenOrigin + PassCounterOffset;
-            go.transform.localScale = PassCounterScale;
-            // CreatePrimitive(Cube) already adds a BoxCollider -- satisfies
-            // PassCounter's [RequireComponent(typeof(Collider))]; its own
-            // Awake() auto-resolves `surfaceCollider` from GetComponent<Collider>()
-            // when left unassigned, so no SetSerializedField call is needed here.
+            var go = BuildProp(PassCounterName, "PassCounter", KitchenOrigin + PassCounterOffset,
+                               new Vector3(1.4f, 1.0f, 0.7f));
             go.AddComponent<PassCounter>();
         }
 
@@ -701,14 +809,12 @@ namespace Pho.EditorTools
 
         static void BuildRestaurantSign()
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = RestaurantSignName;
-            go.transform.position = RestaurantSignPosition;
-            go.transform.localScale = RestaurantSignScale;
-            // CreatePrimitive(Cube) already adds a BoxCollider, which is all
-            // RestaurantSign needs to be raycast-hittable by PlayerInteractor
-            // (RestaurantSign has no [RequireComponent(typeof(Collider))],
-            // but IInteractable objects need a collider to be hit at all).
+            // Floor-position convention via BuildProp -- the old
+            // centre-positioned primitive sank half below the floor once the
+            // layout constants moved to floor coordinates, which put the
+            // whole sign under the player's eye line and made it
+            // un-interactable.
+            var go = BuildProp(RestaurantSignName, "RestaurantSign", RestaurantSignPosition, RestaurantSignScale);
             go.AddComponent<RestaurantSign>();
         }
 
@@ -718,13 +824,7 @@ namespace Pho.EditorTools
 
         static void BuildUpgradeStation()
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = UpgradeStationName;
-            go.transform.position = KitchenOrigin + UpgradeStationOffset;
-            go.transform.localScale = UpgradeStationScale;
-            // CreatePrimitive(Cube) supplies the BoxCollider the player needs
-            // to aim at. equipmentId keeps its own serialized default
-            // ("eq.burner_commercial") -- the single upgrade this slice has.
+            var go = BuildProp(UpgradeStationName, "MenuBoard", KitchenOrigin + UpgradeStationOffset, UpgradeStationScale);
             go.AddComponent<UpgradeStation>();
         }
 

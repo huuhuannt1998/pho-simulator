@@ -466,7 +466,12 @@ def emit(obj, asset_name, focus, distance, floor_origin=True,
         set_origin_to(obj, origin_point)
 
     glb, png = lib.out_paths(asset_name)
+    lib.shade_smooth_by_angle(obj, 35)
     lib.export_glb(obj, glb)
+    # FBX is the format Unity imports natively -- see lib.export_fbx. This
+    # script builds its own export call rather than using lib.finish, so it
+    # must emit both formats explicitly.
+    lib.export_fbx(obj, glb[:-4] + ".fbx")
     d = obj.dimensions
     print(f"ART_DIMS {asset_name} w={d.x:.3f} d={d.y:.3f} h={d.z:.3f}")
     print(f"ART_SLOTS {asset_name} " +

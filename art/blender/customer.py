@@ -572,7 +572,12 @@ def preview_views(asset_name, focus, distance):
 def emit(obj, asset_name, focus, distance):
     lib.set_origin_to_floor(obj)
     glb, _ = lib.out_paths(asset_name)
+    lib.shade_smooth_by_angle(obj, 35)
     lib.export_glb(obj, glb)
+    # FBX is the format Unity imports natively -- see lib.export_fbx. This
+    # script builds its own export call rather than using lib.finish, so it
+    # must emit both formats explicitly.
+    lib.export_fbx(obj, glb[:-4] + ".fbx")
 
     dims = obj.dimensions
     print(f"ART_DIMS {asset_name} w={dims.x:.3f} d={dims.y:.3f} h={dims.z:.3f} "
