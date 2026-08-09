@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d8f163f92f914a6b9c53c22a1def880, type: 3}
+  m_Name: GameDatabase
+  m_EditorClassIdentifier: Pho.Data::Pho.Data.GameDatabase
+  ingredients:
+  - {fileID: 11400000, guid: f3725b10bba2d4f5ab61ba9a5ac29b5c, type: 2}
+  - {fileID: 11400000, guid: 555e668661cc3458d9e2a94b5acce1d0, type: 2}
+  - {fileID: 11400000, guid: 47d3acff21b674bf19420715a1743b5a, type: 2}
+  - {fileID: 11400000, guid: 1bcfd2bfb49384a82a3daf69d71ece0a, type: 2}
+  - {fileID: 11400000, guid: b476cb50973d44bcfa1ba5f9f05ea2f7, type: 2}
+  - {fileID: 11400000, guid: 0ab8ccef2b0fc4e84b1d26611d459c38, type: 2}
+  recipes:
+  - {fileID: 11400000, guid: 34d36370c74114bccad26bd2fb94a1ec, type: 2}
+  - {fileID: 11400000, guid: 0a6aaf25851a04a5a94fd0bc7f45ca67, type: 2}
+  equipment: []
+  archetypes: []

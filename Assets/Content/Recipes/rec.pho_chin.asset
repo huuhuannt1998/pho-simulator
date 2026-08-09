@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f09fd1625a93c434895dd1b6975f9be4, type: 3}
+  m_Name: rec.pho_chin
+  m_EditorClassIdentifier: Pho.Data::Pho.Data.RecipeData
+  id: rec.pho_chin
+  displayName: "Ph\u1EDF Ch\xEDn (Well-Done Beef)"
+  components:
+  - slot: 0
+    ingredientId: ing.rice_noodles
+    amount: 1
+    tolerance: 0.1
+    required: 1
+  - slot: 1
+    ingredientId: ing.broth_base
+    amount: 1
+    tolerance: 0.1
+    required: 1
+  - slot: 2
+    ingredientId: ing.beef_well_done
+    amount: 1
+    tolerance: 0.1
+    required: 1
+  - slot: 3
+    ingredientId: ing.onion
+    amount: 0.3
+    tolerance: 0.2
+    required: 0
+  - slot: 4
+    ingredientId: ing.herbs_mixed
+    amount: 0.3
+    tolerance: 0.2
+    required: 0
+  basePrice: 10.5
+  preparationDifficulty01: 0.35
+  targetBrothVolumeLiters: 0.5
+  targetServeTemperatureC: 75
