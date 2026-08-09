@@ -28,10 +28,15 @@
 ExportedObj/
 .consulo/
 *.csproj
+!Tools/*.csproj
 *.unityproj
 *.sln
 *.suo
 *.tmp
+
+# Tools/PhoDomain.Tests.csproj build output
+Tools/bin/
+Tools/obj/
 *.user
 *.userprefs
 *.pidb

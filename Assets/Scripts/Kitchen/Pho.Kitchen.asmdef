@@ -1,0 +1,17 @@
+{
+    "name": "Pho.Kitchen",
+    "rootNamespace": "Pho.Kitchen",
+    "references": [
+        "Pho.Domain",
+        "Pho.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Standalone NUnit harness for Pho.Domain and Pho.Save; no Unity required.
+    Compiles the exact same source files Unity compiles into
+    Pho.Domain.asmdef, Pho.Save.asmdef, Pho.Domain.Tests.asmdef, and
+    Pho.Save.Tests.asmdef, so a green `dotnet test` here is a real signal,
+    not a parallel reimplementation.
+
+    Run: dotnet test Tools/PhoDomain.Tests.csproj (about 1s, no Library lock)
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RootNamespace>Pho.Domain.TestRunner</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Assets\Scripts\Domain\**\*.cs" LinkBase="Domain" />
+    <Compile Include="..\Assets\Scripts\Save\**\*.cs" LinkBase="Save" />
+    <Compile Include="..\Assets\Scripts\Tests\DomainTests\**\*.cs" LinkBase="DomainTests" />
+    <Compile Include="..\Assets\Scripts\Tests\SaveTests\**\*.cs" LinkBase="SaveTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

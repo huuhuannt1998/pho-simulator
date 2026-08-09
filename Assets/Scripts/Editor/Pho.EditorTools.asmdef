@@ -1,0 +1,25 @@
+{
+    "name": "Pho.EditorTools",
+    "rootNamespace": "Pho.EditorTools",
+    "references": [
+        "Pho.Domain",
+        "Pho.Data",
+        "Pho.Core",
+        "Pho.Save",
+        "Pho.Player",
+        "Pho.Kitchen",
+        "Pho.Customers",
+        "Pho.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
