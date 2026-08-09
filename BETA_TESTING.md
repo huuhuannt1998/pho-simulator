@@ -1,8 +1,9 @@
 # Phở Simulator — Beta 1 (playtest build)
 
 The point of this build is **one question: is the core loop fun?**
-Everything is grey boxes. Ignore how it looks — that's deliberate, art comes
-after the answer.
+
+The art is now real (procedurally generated in Blender), but it's
+untextured flat colour — judge the *loop*, not the polish.
 
 ---
 
@@ -19,9 +20,13 @@ If macOS says it's from an unidentified developer: right-click the app →
 
 **Option B — in the Unity Editor**
 
-Open `Assets/Scenes/Boot.unity` **first**, then press Play. If you press Play
-on an empty/Untitled scene nothing will happen — the whole game lives in
-`Boot.unity`.
+Open `Assets/Scenes/Boot.unity` **first**, then press Play. Play on an
+empty/Untitled scene does nothing — the whole game lives in `Boot.unity`.
+
+If your Editor was already open while the art landed, click into the Unity
+window and let it finish reimporting, then **reopen `Boot.unity`** — the
+scene file was regenerated on disk underneath you, so what's in memory is
+stale. The standalone app has none of this problem.
 
 ---
 
@@ -40,29 +45,31 @@ on an empty/Untitled scene nothing will happen — the whole game lives in
 
 ## The loop to test (≈5 minutes)
 
-The restaurant starts in **Prep**. You have unlimited-ish starting stock and
-$1,500.
+You spawn just inside the roll-up shutter, **facing down the length of the
+shop**. The kitchen is at the far end; dining tables are between you and it.
+The restaurant starts in **Prep**, with generous starting stock and $1,500.
 
-1. **Start the broth first — it's the long pole.** Walk to the **BrothPot**
-   (kitchen, to your right) with empty hands and press `E`. It takes about
-   **100 seconds** to become Ready. Start it, then do everything else while
-   it simmers.
-2. **Grab a bowl** from the bowl stack and press `E`.
-3. **Add ingredients** by walking to each station and pressing `E`:
-   rice noodles → beef brisket. (That's the recipe for *Phở Tái*.)
+1. **Start the broth first — it's the long pole.** Walk to the far end and
+   find the **big stock pot on its burner** (left side of the kitchen line).
+   With empty hands, press `E`. It takes about **100 seconds** to reach
+   Ready. Start it, then do everything else while it simmers.
+2. **Grab a bowl** from the stack on the pass counter and press `E`.
+3. **Add ingredients** by walking along the counter of open bins and
+   pressing `E` at each: rice noodles → beef brisket. (That's *Phở Tái*.)
+   The prompt names each one as you look at it.
 4. **Ladle the broth** once the pot reads Ready — walk to it holding the bowl
    and press `E`.
-5. **Open the restaurant** at the **RestaurantSign** near the entrance.
-   **Customers only arrive once you're open**, so don't open until the broth
-   is going.
+5. **Open the restaurant** at the **shop sign**, back near the entrance on
+   the right. **Customers only arrive once you're open**, so don't open
+   until the broth is going.
 6. **A customer arrives** roughly every 20s, walks to a table, and orders.
 7. **Place your finished bowl on the PassCounter** (`E`). It gets scored and
    automatically fulfils the oldest matching order.
 8. **You get paid.** Watch the cash readout in the top-left go up.
 9. **Bus the table** they left — walk up to it and press `E`.
-10. **Buy the upgrade** at the **UpgradeStation** in the kitchen ($450, a
-    commercial burner). Then start a new pot: broth should be noticeably
-    faster.
+10. **Buy the upgrade** at the **menu board** on the right-hand wall ($450,
+    a commercial burner). Then start a fresh pot — broth should be
+    noticeably faster.
 11. **Close the restaurant** at the sign when you're done.
 12. **`F5` to save, `F9` to load** — check your cash and day survive.
 
@@ -82,7 +89,13 @@ Not bugs (I'll find those). **Feel:**
 
 ## Known limitations — not bugs, don't report these
 
-- **Everything is untextured grey boxes.** No art yet, by design.
+- **No textures anywhere.** Every surface is flat colour. This is the single
+  biggest visual gap and it's known.
+- **The bowl of phở is the weakest asset.** It reads as noodle soup, but the
+  beef looks like sliced ham and the broth is a flat opaque disc. Known.
+- **Customers are blocky low-poly figures** with mitten hands. They read as
+  people and the two types are distinguishable at a distance, which is all
+  the gameplay needs.
 - **The HUD is programmer-art text** in the corners. It's a readout, not a
   designed UI.
 - **Ingredient cost always reads $0** in the day summary — there's no
