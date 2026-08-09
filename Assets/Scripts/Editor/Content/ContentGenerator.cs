@@ -40,13 +40,12 @@ namespace Pho.EditorTools.Content
 
             var ingredients = BuildIngredients();
             var recipes = BuildRecipes(ingredients);
+            var equipment = BuildEquipment();
             var balance = BuildBalanceConfig();
 
-            // No equipment/archetype content authored yet for this pass --
-            // see ContentManifest's scope note. Folders are still created so
-            // later agents have a place to drop generated assets without
-            // touching this script.
-            var equipment = System.Array.Empty<EquipmentData>();
+            // No archetype content authored yet -- see ContentManifest's
+            // scope note. The folder is still created so a later agent has a
+            // place to drop generated assets without touching this script.
             var archetypes = System.Array.Empty<CustomerArchetype>();
 
             BuildGameDatabase(ingredients, recipes, equipment, archetypes);
@@ -112,6 +111,27 @@ namespace Pho.EditorTools.Content
                 asset.EditorInit(
                     e.id, e.displayName, e.components, e.basePrice,
                     e.preparationDifficulty01, e.targetBrothVolumeLiters, e.targetServeTemperatureC);
+                EditorUtility.SetDirty(asset);
+                results.Add(asset);
+            }
+            return results.ToArray();
+        }
+
+        /// <summary>
+        /// Same deterministic-path + LoadOrCreate shape as
+        /// <see cref="BuildIngredients"/>, so re-running BuildAllContent
+        /// updates eq.burner_commercial.asset in place and its GUID (and any
+        /// scene/prefab reference to it) survives.
+        /// </summary>
+        static EquipmentData[] BuildEquipment()
+        {
+            var results = new List<EquipmentData>(ContentManifest.Equipment.Length);
+            foreach (var e in ContentManifest.Equipment)
+            {
+                var asset = LoadOrCreate<EquipmentData>($"{EquipmentFolder}/{e.id}.asset");
+                asset.EditorInit(
+                    e.id, e.displayName, e.equipmentType, e.tier, e.purchaseCost,
+                    e.heatRateMultiplier, e.capacityMultiplier, e.qualityBonus01);
                 EditorUtility.SetDirty(asset);
                 results.Add(asset);
             }
