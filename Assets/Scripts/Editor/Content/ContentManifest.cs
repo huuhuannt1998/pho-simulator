@@ -10,12 +10,13 @@ namespace Pho.EditorTools.Content
     /// generated .asset files (docs/architecture.md section 10, "Shared
     /// files that will cause conflicts" -> "Assets/Content/*.asset").
     ///
-    /// Scope for this pass: the vertical slice's first two recipes, Phở Tái
-    /// and Phở Chín (docs/architecture.md section 12 scope-cut table: "Build
-    /// 2 first, add Đặc Biệt once matching is proven"). Equipment and
-    /// customer-archetype content are intentionally NOT authored yet -- those
-    /// land with M13 and M6/M7 respectively; GameDatabase gets empty arrays
-    /// for them until then.
+    /// Scope: the vertical slice's first two recipes, Phở Tái and Phở Chín
+    /// (docs/architecture.md section 12 scope-cut table: "Build 2 first, add
+    /// Đặc Biệt once matching is proven"), plus exactly ONE piece of
+    /// equipment -- M13's Commercial Burner (section 12: "§55.14 buys one
+    /// upgrade -> Keep. Only progression proof in the slice"). Customer
+    /// archetypes are still intentionally NOT authored (M6/M7);
+    /// GameDatabase gets an empty array for them until then.
     /// </summary>
     public static class ContentManifest
     {
@@ -40,6 +41,18 @@ namespace Pho.EditorTools.Content
             public float preparationDifficulty01;
             public float targetBrothVolumeLiters;
             public float targetServeTemperatureC;
+        }
+
+        public struct EquipmentEntry
+        {
+            public string id;
+            public string displayName;
+            public EquipmentType equipmentType;
+            public int tier;
+            public float purchaseCost;
+            public float heatRateMultiplier;
+            public float capacityMultiplier;
+            public float qualityBonus01;
         }
 
         public struct BalanceConfigEntry
@@ -185,6 +198,55 @@ namespace Pho.EditorTools.Content
                 preparationDifficulty01 = 0.35f,
                 targetBrothVolumeLiters = 0.5f,
                 targetServeTemperatureC = 75f,   // beef already cooked; served hotter, no carry-cook need
+            },
+        };
+
+        // ------------------------------------------------------------------
+        // Equipment
+        // ------------------------------------------------------------------
+        //
+        // EXACTLY ONE entry, on purpose. architecture.md section 12 keeps
+        // GDD §55.14 ("buys one upgrade") specifically as the slice's only
+        // progression proof; a second upgrade would be scope creep with no
+        // additional proof value.
+        //
+        // heatRateMultiplier = 1.7 (JUDGMENT CALL worth a reviewer's eye):
+        // architecture.md section 7 illustrates the mechanism with
+        // "heatRateMultiplier 1.0 -> 1.5", but section 9's M13 row states the
+        // testable acceptance criterion as "Buying it cuts measured
+        // broth-ready time >= 30%". Those two numbers conflict, because only
+        // part of the brew is heat-accelerated: BrothSimulator's Filling
+        // phase (10s of the ~100s total) advances at a fixed fill rate that
+        // heatRateMultiplier does not touch -- only Heating (30s) and
+        // Simmering (60s) scale. At 1.5x that yields 10 + 20 + 40 = 70s vs
+        // 100s, i.e. exactly 30.0% in theory and 29.8% once discrete ticking
+        // overhead is measured (verified: ProgressionTests measured
+        // stock=100.75s upgraded=70.75s = 29.8%), which FAILS the >= 30%
+        // criterion. 1.7 gives a comfortable ~37% and still reads as a
+        // believable commercial-vs-domestic burner step. The hard, testable
+        // acceptance criterion is treated as authoritative over the prose
+        // example; ProgressionTests asserts the >= 30% cut directly, so this
+        // number is regression-locked rather than merely asserted here.
+        //
+        // purchaseCost = 450 against EconomyService.StartingCash of 1500:
+        // affordable on day one if the player has not overspent, but a real
+        // 30% dent in the opening balance, so the "earn it" half of the
+        // progression loop still has to happen. capacityMultiplier stays 1
+        // and qualityBonus01 stays 0 -- a burner heats faster, it does not
+        // make the pot bigger or the broth intrinsically better.
+
+        public static readonly EquipmentEntry[] Equipment =
+        {
+            new EquipmentEntry
+            {
+                id = "eq.burner_commercial",
+                displayName = "Commercial Burner",
+                equipmentType = EquipmentType.Burner,
+                tier = 2,
+                purchaseCost = 450f,
+                heatRateMultiplier = 1.7f,
+                capacityMultiplier = 1.0f,
+                qualityBonus01 = 0f,
             },
         };
 
