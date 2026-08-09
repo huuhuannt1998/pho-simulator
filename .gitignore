@@ -1,3 +1,6 @@
+# ---- Claude Code worktree metadata ----
+/.claude/worktrees/
+
 # ---- Unity generated ----
 [Ll]ibrary/
 [Tt]emp/
