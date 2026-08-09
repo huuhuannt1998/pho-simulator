@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.community.netcode.transport.facepunch": "https://github.com/Unity-Technologies/multiplayer-community-contributions.git?path=/Transports/com.community.netcode.transport.facepunch#0eda04fc2146a4f907a61de6403315bce705279e",
     "com.unity.ai.assistant": "2.17.0-pre.1",
     "com.unity.ai.navigation": "2.0.14",
     "com.unity.inputsystem": "1.20.0",
