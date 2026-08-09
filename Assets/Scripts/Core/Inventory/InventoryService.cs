@@ -1,6 +1,7 @@
 using Pho.Core;
 using Pho.Domain.Contracts;
 using Pho.Domain.Inventory;
+using Pho.Save.Participation;
 using UnityEngine;
 
 namespace Pho.Core.Inventory
@@ -60,6 +61,11 @@ namespace Pho.Core.Inventory
             }
 
             ctx.Register<InventoryModel>(model);
+
+            if (ctx.TryGet<SaveParticipantRegistry>(out var saveRegistry))
+            {
+                saveRegistry.Register(new InventoryModelSaveParticipant(model));
+            }
         }
 
         static void SeedStartingStock(InventoryModel model, IGameDatabase database)

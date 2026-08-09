@@ -70,6 +70,19 @@ namespace Pho.Domain.DayCycle
             }
         }
 
+        /// <summary>
+        /// Directly sets state from a save file, bypassing the normal
+        /// Open/CloseRestaurant transition guards (a loaded save is not a
+        /// gameplay transition -- it can legitimately jump straight into any
+        /// phase, e.g. resuming mid-Open).
+        /// </summary>
+        public void RestoreState(int day, float timeOfDaySeconds, DayPhase phase)
+        {
+            Day = day;
+            TimeOfDaySeconds = timeOfDaySeconds;
+            Phase = phase;
+        }
+
         public void OpenRestaurant()
         {
             if (Phase == DayPhase.Open)

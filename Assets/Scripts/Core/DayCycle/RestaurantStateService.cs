@@ -3,6 +3,8 @@ using Pho.Core;
 using Pho.Domain.Contracts;
 using Pho.Domain.DayCycle;
 using Pho.Domain.Events;
+using Pho.Save.Dto;
+using Pho.Save.Participation;
 using UnityEngine;
 
 namespace Pho.Core.DayCycle
@@ -43,7 +45,7 @@ namespace Pho.Core.DayCycle
     /// (0m). This keeps DayEnded's frozen signature satisfied today without
     /// fabricating numbers that don't exist yet.
     /// </summary>
-    public sealed class RestaurantStateServiceBehaviour : MonoBehaviour
+    public sealed class RestaurantStateServiceBehaviour : MonoBehaviour, ISaveParticipant
     {
         DayClock _clock;
         IBalanceConfig _cfg;
@@ -103,6 +105,30 @@ namespace Pho.Core.DayCycle
             _clock.CloseRestaurant();
             _events.Publish(new RestaurantClosed());
         }
+
+        /// <summary>ISaveParticipant. RestoreOrder mirrors InstallOrder.DayCycle.</summary>
+        public int RestoreOrder => InstallOrder.DayCycle;
+
+        public void Capture(SaveFile save)
+        {
+            if (!_bound) return;
+            save.world.day = _clock.Day;
+            save.world.timeOfDaySeconds = _clock.TimeOfDaySeconds;
+            save.world.phase = _clock.Phase.ToString();
+        }
+
+        public void Restore(SaveFile save, IGameDatabase db)
+        {
+            if (!_bound) return;
+
+            var phase = (DayPhase)Enum.Parse(typeof(DayPhase), save.world.phase);
+            _clock.RestoreState(save.world.day, save.world.timeOfDaySeconds, phase);
+
+            // Resync so Update() doesn't mistake "loaded a different day
+            // than whatever _lastSeenDay was before this load" for a
+            // same-session day-wrap and fire a spurious DayEnded.
+            _lastSeenDay = _clock.Day;
+        }
     }
 
     /// <summary>
@@ -131,6 +157,11 @@ namespace Pho.Core.DayCycle
             behaviour.Bind(StartDay, cfg, ctx.Events);
 
             ctx.Register<RestaurantStateServiceBehaviour>(behaviour);
+
+            if (ctx.TryGet<SaveParticipantRegistry>(out var saveRegistry))
+            {
+                saveRegistry.Register(behaviour);
+            }
         }
     }
 }

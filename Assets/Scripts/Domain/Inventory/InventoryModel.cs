@@ -86,6 +86,32 @@ namespace Pho.Domain.Inventory
             });
         }
 
+        /// <summary>Removes every lot. Save/load restore point -- see AddLot.</summary>
+        public void Clear() => _lots.Clear();
+
+        /// <summary>
+        /// Adds a lot with an explicit Freshness01, unlike <see cref="Add"/>
+        /// (which always pins a freshly-purchased lot's freshness to 1).
+        /// Exists for save/load restore, where a lot's freshness at the
+        /// moment of saving must round-trip exactly rather than being reset
+        /// to "just bought."
+        /// </summary>
+        public void AddLot(IngredientId id, float amount, float quality01, float freshness01, int day, StorageRequirement storage)
+        {
+            if (amount <= 0f)
+                throw new ArgumentException("Add amount must be positive.", nameof(amount));
+
+            _lots.Add(new IngredientLot
+            {
+                Ingredient = id,
+                Quantity = amount,
+                QualityAtPurchase01 = quality01,
+                Freshness01 = MathP.Clamp01(freshness01),
+                PurchasedOnDay = day,
+                StoredIn = storage,
+            });
+        }
+
         public float TotalQuantity(IngredientId id)
         {
             float total = 0f;

@@ -216,6 +216,54 @@ namespace Pho.Domain.Tests
         }
 
         [Test]
+        public void Clear_RemovesAllLots()
+        {
+            var inv = new InventoryModel();
+            inv.Add(Beef, 1f, 0.8f, day: 1, storage: StorageRequirement.Refrigerated);
+            inv.Add(Noodle, 1f, 0.8f, day: 1, storage: StorageRequirement.Ambient);
+
+            inv.Clear();
+
+            Assert.That(inv.Lots.Count, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AddLot_PreservesExplicitFreshness_UnlikeAdd()
+        {
+            var inv = new InventoryModel();
+
+            inv.AddLot(Beef, 2f, 0.8f, freshness01: 0.4f, day: 1, storage: StorageRequirement.Refrigerated);
+
+            Assert.That(inv.Lots[0].Freshness01, Is.EqualTo(0.4f).Within(1e-5f), "AddLot must round-trip freshness exactly, not reset it to 1 like Add does");
+            Assert.That(inv.Lots[0].Quantity, Is.EqualTo(2f));
+            Assert.That(inv.Lots[0].QualityAtPurchase01, Is.EqualTo(0.8f));
+            Assert.That(inv.Lots[0].PurchasedOnDay, Is.EqualTo(1));
+            Assert.That(inv.Lots[0].StoredIn, Is.EqualTo(StorageRequirement.Refrigerated));
+        }
+
+        [Test]
+        public void AddLot_ClampsFreshnessTo01()
+        {
+            var inv = new InventoryModel();
+
+            inv.AddLot(Beef, 1f, 0.8f, freshness01: 1.5f, day: 1, storage: StorageRequirement.Ambient);
+            inv.AddLot(Noodle, 1f, 0.8f, freshness01: -0.5f, day: 1, storage: StorageRequirement.Ambient);
+
+            Assert.That(inv.Lots[0].Freshness01, Is.EqualTo(1f));
+            Assert.That(inv.Lots[1].Freshness01, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void AddLot_ZeroOrNegativeAmount_Throws()
+        {
+            var inv = new InventoryModel();
+
+            Assert.That(
+                () => inv.AddLot(Beef, 0f, 0.8f, 1f, day: 1, storage: StorageRequirement.Ambient),
+                Throws.ArgumentException);
+        }
+
+        [Test]
         public void AdvanceSpoilage_AffectsAllLots_AcrossDifferentIngredients()
         {
             var inv = new InventoryModel();

@@ -157,6 +157,35 @@ namespace Pho.Domain.Tests
             Assert.That(clockA.Phase, Is.EqualTo(clockB.Phase));
         }
 
+        // ---- Save/load restore ----
+
+        [Test]
+        public void RestoreState_SetsDayTimeAndPhaseDirectly_BypassingTransitionGuards()
+        {
+            var clock = new DayClock(1, new FakeBalanceConfig());
+
+            // Prep -> Closed directly would throw via CloseRestaurant(); RestoreState must not care.
+            clock.RestoreState(day: 5, timeOfDaySeconds: 123.5f, phase: DayPhase.Closed);
+
+            Assert.That(clock.Day, Is.EqualTo(5));
+            Assert.That(clock.TimeOfDaySeconds, Is.EqualTo(123.5f).Within(1e-5f));
+            Assert.That(clock.Phase, Is.EqualTo(DayPhase.Closed));
+        }
+
+        [Test]
+        public void RestoreState_ThenTick_BehavesNormallyAfterward()
+        {
+            var cfg = new FakeBalanceConfig { DayLengthSeconds = 900f };
+            var clock = new DayClock(1, cfg);
+
+            clock.RestoreState(day: 2, timeOfDaySeconds: 890f, phase: DayPhase.Open);
+            clock.Tick(20f, cfg);
+
+            Assert.That(clock.Day, Is.EqualTo(3));
+            Assert.That(clock.TimeOfDaySeconds, Is.EqualTo(10f).Within(0.001f));
+            Assert.That(clock.Phase, Is.EqualTo(DayPhase.Prep));
+        }
+
         [Test]
         public void Tick_ManySmallStepsWithinASingleDay_MatchesOneEquivalentTick()
         {

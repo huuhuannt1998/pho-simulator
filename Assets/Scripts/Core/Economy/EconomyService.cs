@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Pho.Core;
+using Pho.Domain.Contracts;
 using Pho.Domain.Events;
+using Pho.Save.Dto;
+using Pho.Save.Participation;
 
 namespace Pho.Core.Economy
 {
@@ -57,7 +60,7 @@ namespace Pho.Core.Economy
     /// zero-amount transaction), never a legitimate runtime occurrence.
     /// </summary>
     [AutoInstall]
-    public sealed class EconomyService : IInstaller
+    public sealed class EconomyService : IInstaller, ISaveParticipant
     {
         /// <summary>GDD's "$1,500 equivalent" starting cash example.</summary>
         public const decimal StartingCash = 1500m;
@@ -79,7 +82,25 @@ namespace Pho.Core.Economy
         {
             Bind(ctx.Events, StartingCash);
             ctx.Register<EconomyService>(this);
+
+            if (ctx.TryGet<SaveParticipantRegistry>(out var saveRegistry))
+            {
+                saveRegistry.Register(this);
+            }
         }
+
+        /// <summary>ISaveParticipant. RestoreOrder mirrors InstallOrder -- no cross-participant ordering dependency exists today, but reusing the same constant avoids inventing a second, parallel ordering policy.</summary>
+        public int RestoreOrder => InstallOrder.Economy;
+
+        public void Capture(SaveFile save) => save.economy.cash = Cash;
+
+        /// <summary>
+        /// Routed through Apply (not a bare setter) so a restore still logs
+        /// a LedgerEntry and publishes CashChanged like any other cash
+        /// change -- UI (CashPresenter) picks it up the same way it would a
+        /// normal transaction, no special-casing needed downstream.
+        /// </summary>
+        public void Restore(SaveFile save, IGameDatabase db) => Apply(save.economy.cash - Cash, LedgerCategory.Other);
 
         /// <summary>
         /// Injection seam separated from Install so this can be constructed

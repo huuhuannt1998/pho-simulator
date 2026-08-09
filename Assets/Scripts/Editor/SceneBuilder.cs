@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Pho.Core;
 using Pho.Core.DayCycle;
+using Pho.Core.Save;
 using Pho.Customers;
 using Pho.Data;
 using Pho.Domain.Contracts;
@@ -290,6 +291,11 @@ namespace Pho.EditorTools
         {
             var go = new GameObject(GameManagerName);
             var bootstrap = go.AddComponent<GameBootstrap>();
+
+            // F5/F9 debug save/load -- see SaveDebugTrigger's own class doc
+            // comment. No UI; this is the minimal way to actually exercise
+            // the save system until a real save/load menu exists.
+            go.AddComponent<SaveDebugTrigger>();
 
             var database = AssetDatabase.LoadAssetAtPath<GameDatabase>(GameDatabasePath);
             if (database != null)
