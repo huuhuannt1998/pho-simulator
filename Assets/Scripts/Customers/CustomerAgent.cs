@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using Pho.Core.Orders;
 using Pho.Domain.Contracts;
 using Pho.Domain.Customers;
 using Pho.Domain.Events;
@@ -79,6 +80,11 @@ namespace Pho.Customers
         CustomerId _customerId;
         bool _bound;
 
+        // Injected by Bind(...) -- see the OrderService parameter's doc
+        // comment there. Null-checked at every call site below so an
+        // unbound customer degrades gracefully instead of NRE-ing.
+        OrderService _orderService;
+
         // See the SEAT-HANDLE INTEGRATION GAP note in the class doc comment.
         TableRegistry.SeatId _claimedSeatId = TableRegistry.SeatId.Invalid;
         bool _hasClaimedSeat;
@@ -105,13 +111,25 @@ namespace Pho.Customers
         /// needs. Safe to call once per spawn (typically right after
         /// `Instantiate`, by `CustomerSpawner`).
         /// </summary>
-        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, ICustomerArchetype archetype, IRandom rng)
+        /// <param name="orderService">
+        /// Optional (M8) -- reaches the real `Pho.Core.Orders.OrderService`
+        /// so `PlaceOrder`/`TryTakeServedDish` are backed by a real order
+        /// pipeline instead of the old stub-with-log bodies. Appended as the
+        /// last parameter (rather than inserted mid-list) to keep this
+        /// signature change additive/mergeable if another agent is
+        /// concurrently adding its own trailing Bind parameter in this same
+        /// wave. Null-safe: an unbound customer just logs and no-ops, same
+        /// degrade-gracefully convention as every other stand-in in this
+        /// class.
+        /// </param>
+        public void Bind(TableRegistry registry, IBalanceConfig cfg, IEventBus events, ICustomerArchetype archetype, IRandom rng, OrderService orderService = null)
         {
             _tableRegistry = registry;
             _cfg = cfg;
             _events = events;
             _archetype = archetype;
             _rng = rng ?? new SystemRandom();
+            _orderService = orderService;
 
             _customerId = new CustomerId(Guid.NewGuid().ToString());
             _brain = new CustomerBrain(_customerId, _archetype, _cfg, _events, _rng);
@@ -275,22 +293,66 @@ namespace Pho.Customers
         /// <summary>STAND-IN: no cleanliness system exists yet (architecture.md §12 reduces it to one float, but nothing produces it in Unity yet). Returns the serialized stub field.</summary>
         public float Cleanliness01 => cleanliness01Stub;
 
-        /// <summary>STUBBED-WITH-LOG: no OrderService/order board exists yet (M8/M9, later wave). Logs the intended order and returns a default OrderId so the brain's state machine can proceed without a real order pipeline.</summary>
+        /// <summary>
+        /// REAL (M8): delegates to `Pho.Core.Orders.OrderService.CreateOrder`.
+        /// Falls back to a logged no-op (returns `default`) if no
+        /// OrderService is bound, same degrade-gracefully convention as the
+        /// rest of this class's stand-ins.
+        /// </summary>
         public OrderId PlaceOrder(CustomerId id, SeatHandle seat, RecipeId recipe, OrderModifiers mods)
         {
-            Debug.Log($"[CustomerAgent] STUB PlaceOrder: customer={id} recipe={recipe} noOnion={mods.NoOnion} extraMeat={mods.ExtraMeat} size={mods.Size} spice={mods.Spice}. No OrderService wired yet -- would create a real order here.");
-            return default;
+            if (_orderService == null)
+            {
+                Debug.LogWarning($"[CustomerAgent] PlaceOrder({id}, recipe={recipe}) called with no OrderService bound -- no order created.");
+                return default;
+            }
+
+            // SEAT-HANDLE INTEGRATION GAP (see class doc comment): `seat` is
+            // currently always `default` because TryClaimSeat above cannot
+            // construct a real Domain SeatHandle. Falls back to this
+            // customer's own tracked TableRegistry seat -- see
+            // ResolveOwnTableId -- so the order still carries a meaningful
+            // table id while that gap persists; a real, non-empty
+            // `seat.TableId` (once the gap closes) takes priority.
+            string tableId = !seat.IsEmpty ? seat.TableId : ResolveOwnTableId();
+
+            return _orderService.CreateOrder(id, tableId, recipe, mods, Time.time);
         }
 
-        /// <summary>STUBBED-WITH-LOG: no kitchen-to-customer serving pipeline exists yet. Always reports "nothing ready" so WaitingForFood keeps polling harmlessly instead of fabricating a fake dish.</summary>
+        /// <summary>Best-effort table id for the order while the SEAT-HANDLE INTEGRATION GAP persists (see PlaceOrder). Falls back to a placeholder string, never null.</summary>
+        string ResolveOwnTableId()
+        {
+            if (_hasClaimedSeat && _tableRegistry != null && _tableRegistry.TryGetTableId(_claimedSeatId, out var tableId))
+                return tableId;
+
+            return "table.unknown";
+        }
+
+        /// <summary>REAL (M8): delegates to `Pho.Core.Orders.OrderService.TryTakeServedDish`. Reports not-ready (never throws) if no OrderService is bound.</summary>
         public bool TryTakeServedDish(OrderId order, out ServedDish dish)
         {
-            Debug.Log($"[CustomerAgent] STUB TryTakeServedDish: order={order}. No serving pipeline wired yet -- always reporting not-ready.");
-            dish = default;
-            return false;
+            if (_orderService == null)
+            {
+                dish = default;
+                return false;
+            }
+
+            return _orderService.TryTakeServedDish(order, out dish);
         }
 
-        /// <summary>STUBBED-WITH-LOG: no EconomyService/Ledger is reachable from Pho.Customers yet. Logs the intended cash event.</summary>
+        /// <summary>
+        /// STILL STUBBED-WITH-LOG, deliberately, for this pass:
+        /// `Pho.Core.Orders.OrderService` (this pass) and the economy
+        /// layer's `EconomyService` (a sibling agent's concurrent,
+        /// unseen work in a different worktree) are being built at the same
+        /// time -- referencing the sibling's type here would not compile.
+        /// Real wiring is a small, well-defined reconciliation step for the
+        /// integration pass once both land:
+        /// <c>economyService.Credit(amount + tip, LedgerCategory.Sale);</c>
+        /// (exact method/enum names per whatever EconomyService actually
+        /// ships) in place of the Debug.Log below. Flagged again in the
+        /// final report.
+        /// </summary>
         public void Pay(CustomerId id, decimal amount, decimal tip)
         {
             Debug.Log($"[CustomerAgent] STUB Pay: customer={id} amount={amount:0.00} tip={tip:0.00}. No EconomyService wired yet -- would apply a real cash/ledger change here.");
