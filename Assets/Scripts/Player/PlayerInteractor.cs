@@ -59,11 +59,21 @@ namespace Pho.Player
 
         /// <summary>
         /// Optional replacement for the M2 PlaceholderInteractorAgent.
-        /// M3's real hand-slot agent should call this once it exists.
+        /// M3's real hand-slot agent (PlayerHandSlot) calls this from its
+        /// own Start(). When a real agent is supplied, its HoldAnchor is
+        /// adopted into this component's own `holdAnchor` field too, so
+        /// there is exactly one HoldAnchor Transform in play -- PlayerHandSlot
+        /// is the single source of truth for it, not this M2 placeholder
+        /// copy. See PlayerHandSlot's class doc comment for the full
+        /// rationale.
         /// </summary>
         public void BindAgent(IInteractorAgent agent)
         {
             _agent = agent ?? new PlaceholderInteractorAgent(holdAnchor);
+            if (agent != null && agent.HoldAnchor != null)
+            {
+                holdAnchor = agent.HoldAnchor;
+            }
         }
 
         void Awake()
