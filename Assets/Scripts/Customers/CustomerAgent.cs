@@ -283,10 +283,24 @@ namespace Pho.Customers
             }
         }
 
-        /// <summary>REAL (once `entranceTransform` is assigned) -- returns Vec3.Zero and warns once if it isn't.</summary>
+        /// <summary>
+        /// Runtime wiring for entranceTransform/exitTransform -- these are
+        /// per-instance scene Transforms (see the field tooltips) that
+        /// cannot be baked into the shared Customer prefab, so a spawner
+        /// (CustomerSpawner) is expected to call this right after
+        /// Instantiate. Either argument may be null (falls back to the
+        /// existing Vec3.Zero + warn-once behavior in ResolveAnchor).
+        /// </summary>
+        public void SetWorldAnchors(Transform entrance, Transform exit)
+        {
+            entranceTransform = entrance;
+            exitTransform = exit;
+        }
+
+        /// <summary>REAL (once `entranceTransform` is assigned, e.g. via SetWorldAnchors) -- returns Vec3.Zero and warns once if it isn't.</summary>
         public Vec3 EntrancePosition => ResolveAnchor(entranceTransform, ref _warnedNoEntrance, "entranceTransform");
 
-        /// <summary>REAL (once `exitTransform` is assigned) -- returns Vec3.Zero and warns once if it isn't.</summary>
+        /// <summary>REAL (once `exitTransform` is assigned, e.g. via SetWorldAnchors) -- returns Vec3.Zero and warns once if it isn't.</summary>
         public Vec3 ExitPosition => ResolveAnchor(exitTransform, ref _warnedNoExit, "exitTransform");
 
         bool _warnedNoEntrance, _warnedNoExit;

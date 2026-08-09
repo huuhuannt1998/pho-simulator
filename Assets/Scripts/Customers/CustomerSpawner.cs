@@ -37,6 +37,12 @@ namespace Pho.Customers
         [Tooltip("Where new customers appear. Falls back to this GameObject's own position if unassigned.")]
         [SerializeField] Transform spawnPoint;
 
+        [Header("World anchors (forwarded onto each spawned CustomerAgent)")]
+        [Tooltip("Where WalkingToEntrance/Queuing walk to. Forwarded onto each spawned CustomerAgent via SetWorldAnchors, since these are per-instance and can't be baked into the shared Customer prefab.")]
+        [SerializeField] Transform entranceTransform;
+        [Tooltip("Where Leaving/LeavingAngry walk to before Despawn. Same forwarding as entranceTransform.")]
+        [SerializeField] Transform exitTransform;
+
         [Header("Timing")]
         [SerializeField] float spawnIntervalSeconds = 20f;
 
@@ -107,6 +113,7 @@ namespace Pho.Customers
             var spawnRotation = spawnPoint != null ? spawnPoint.rotation : transform.rotation;
 
             var agent = Instantiate(customerPrefab, spawnPosition, spawnRotation);
+            agent.SetWorldAnchors(entranceTransform, exitTransform);
             agent.Bind(_tableRegistry, _cfg, _events, archetype, _rng);
         }
 

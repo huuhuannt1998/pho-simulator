@@ -467,6 +467,13 @@ namespace Pho.EditorTools
 
             SetSerializedField(spawner, "spawnPoint", entrance.transform);
 
+            // Forwarded by CustomerSpawner onto each spawned CustomerAgent
+            // via SetWorldAnchors (integration-pass addition to
+            // CustomerSpawner.cs -- these fields didn't exist when this
+            // scene-building code was first written; the gap is now closed).
+            SetSerializedField(spawner, "entranceTransform", entrance.transform);
+            SetSerializedField(spawner, "exitTransform", exit.transform);
+
             var customerPrefabGo = AssetDatabase.LoadAssetAtPath<GameObject>(CustomerPrefabPath);
             if (customerPrefabGo != null)
             {
@@ -484,28 +491,6 @@ namespace Pho.EditorTools
             {
                 Debug.LogWarning($"[SceneBuilder] Could not load '{CustomerPrefabPath}' -- CustomerSpawner.customerPrefab left unassigned. Run 'Pho/Prefabs/Build All Prefabs' BEFORE 'Pho/Scenes/Build Boot Scene'.");
             }
-
-            // KNOWN GAP (flagged again in the final report): CustomerSpawner
-            // (Pho.Customers, NOT owned by this pass) has no serialized
-            // entrance/exit Transform fields of its own -- only
-            // `customerPrefab` and `spawnPoint`. CustomerSpawner.TrySpawn()
-            // Instantiates the prefab and calls CustomerAgent.Bind(...), but
-            // Bind's signature (registry, cfg, events, archetype, rng) has
-            // no entrance/exit parameter either, and there is no other hook
-            // that forwards a Transform onto the freshly spawned
-            // CustomerAgent's private `entranceTransform`/`exitTransform`
-            // fields. Those fields are per-instance
-            // ([SerializeField], not public) and can't be baked into the
-            // shared Customer prefab (see PrefabBuilder.cs's own comment).
-            // The Entrance/Exit GameObjects created above exist in the scene
-            // so a follow-up edit to CustomerSpawner.cs (out of this pass's
-            // ownership -- Assets/Scripts/Customers/** belongs to a
-            // different agent) can wire them onto each spawned
-            // CustomerAgent. Until that lands, every runtime-spawned
-            // customer's entranceTransform/exitTransform stay unassigned,
-            // and CustomerAgent.EntrancePosition/ExitPosition fall back to
-            // Vec3.Zero with a one-time warning (see CustomerAgent.cs's
-            // ResolveAnchor).
         }
 
         static void BakeNavMesh(GameObject ground)
