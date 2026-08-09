@@ -124,20 +124,40 @@ def add_bevel(obj, width=0.004, segments=2):
 
 
 def shade_smooth_by_angle(obj, degrees=35):
-    """Smooth shading limited by angle -- keeps hard edges hard."""
-    mesh = obj.data
-    for poly in mesh.polygons:
+    """
+    Smooth shading limited by angle -- rounded forms read as round, hard
+    edges stay hard.
+
+    API NOTE (this function was silently a NO-OP and every curved asset in
+    the project shipped visibly faceted because of it): Blender REMOVED
+    `Mesh.use_auto_smooth` / `auto_smooth_angle` in 4.1, and there is no
+    "SMOOTH_BY_ANGLE" entry in the modifier type enum, so both branches of
+    the previous implementation fell through without error. The supported
+    path on 4.1+ (verified present on 5.1.1) is the operator
+    `bpy.ops.object.shade_smooth_by_angle`, which attaches the stock
+    Smooth by Angle geometry-nodes modifier.
+
+    Fails soft: shading is cosmetic, so a future API change should degrade
+    to flat shading, never break an asset build.
+    """
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+    try:
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(degrees))
+        return obj
+    except (AttributeError, TypeError, RuntimeError):
+        pass
+
+    try:
+        bpy.ops.object.shade_auto_smooth(angle=math.radians(degrees))
+        return obj
+    except (AttributeError, TypeError, RuntimeError):
+        pass
+
+    for poly in obj.data.polygons:
         poly.use_smooth = True
-    mod = obj.modifiers.new("SmoothByAngle", "SMOOTH_BY_ANGLE") if "SMOOTH_BY_ANGLE" in [
-        t.identifier for t in bpy.types.Modifier.bl_rna.properties["type"].enum_items
-    ] else None
-    if mod is None:
-        # Older/newer API fallback: auto smooth via custom split normals.
-        try:
-            mesh.use_auto_smooth = True
-            mesh.auto_smooth_angle = math.radians(degrees)
-        except AttributeError:
-            pass
     return obj
 
 
@@ -309,14 +329,21 @@ def out_paths(asset_name):
     return glb, preview
 
 
-def finish(obj, asset_name, preview=True, **preview_kwargs):
+def finish(obj, asset_name, preview=True, smooth_degrees=35, **preview_kwargs):
     """
-    Standard tail end of every asset script: floor origin, export both
-    formats, render a preview.
+    Standard tail end of every asset script: smooth shading, floor origin,
+    export both formats, render a preview.
 
     Writes FBX (what Unity imports) AND GLB (portable interchange) -- see
     export_fbx's docstring for why both.
+
+    Smoothing is applied HERE, centrally, rather than left to each asset
+    script to remember -- angle-limited at 35 degrees, so cylinders and
+    domes read as round while box edges (90 degrees) stay crisp. Pass
+    smooth_degrees=None to opt out for a deliberately faceted asset.
     """
+    if smooth_degrees:
+        shade_smooth_by_angle(obj, smooth_degrees)
     set_origin_to_floor(obj)
     glb, png = out_paths(asset_name)
     export_glb(obj, glb)

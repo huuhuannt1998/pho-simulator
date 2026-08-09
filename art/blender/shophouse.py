@@ -476,7 +476,14 @@ def main():
                       (shutter, "ShophouseShutter"),
                       (threshold, "ShophouseThreshold")):
         glb, _ = lib.out_paths(name)
+        # Smoothing is normally applied by lib.finish, which this script
+        # deliberately bypasses to preserve the shared world-origin
+        # coordinate contract documented at the top of this file -- so apply
+        # it explicitly here rather than shipping faceted architecture.
+        lib.shade_smooth_by_angle(obj, 35)
         lib.export_glb(obj, glb)
+        # FBX is the format Unity actually imports (see lib.export_fbx).
+        lib.export_fbx(obj, glb[:-4] + ".fbx")
 
     _, png_dir = lib.out_paths("x")
     prev = os.path.dirname(png_dir)
