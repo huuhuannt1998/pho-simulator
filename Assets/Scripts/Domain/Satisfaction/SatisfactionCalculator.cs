@@ -42,7 +42,7 @@ namespace Pho.Domain.Satisfaction
 
         public static SatisfactionResult Evaluate(in ServiceRecord r, ICustomerArchetype a, IBalanceConfig cfg)
         {
-            float foodQuality01 = MathP.Clamp01(r.OverallQuality01);
+            float foodQuality01 = MathP.Clamp01(r.Quality.Overall01);
 
             // WaitTimeScore01: IBalanceConfig has no wait-time-score curve
             // yet, so this uses the archetype's own patience ceiling

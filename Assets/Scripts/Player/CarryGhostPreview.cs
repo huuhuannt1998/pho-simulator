@@ -72,7 +72,15 @@ namespace Pho.Player
             }
 
             var surface = hit.collider.GetComponentInParent<IPlacementSurface>();
-            bool valid = surface != null && surface.TryGetPlacement(hit.point, held, out var pose);
+            // Pose pre-initialized to default: TryGetPlacement's `out` is only
+            // definitely-assigned (to the compiler) inside the && expression
+            // itself -- capturing the bool into `valid` and reading `pose` in
+            // a later, separate `if` loses that flow-analysis correlation
+            // even though it's runtime-safe (valid is only true when
+            // TryGetPlacement actually ran and assigned it). Explicit default
+            // satisfies definite assignment without changing behavior.
+            Pose pose = default;
+            bool valid = surface != null && surface.TryGetPlacement(hit.point, held, out pose);
 
             SetVisible(true);
 

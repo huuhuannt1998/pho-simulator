@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using Pho.Domain.Contracts;
+using Pho.Domain.Cooking;
 using Pho.Domain.Satisfaction;
 using Pho.Domain.Tests.Fakes;
 
@@ -31,7 +32,9 @@ namespace Pho.Domain.Tests
             decimal pricePaid = expectedPrice * (decimal)(2f - value); // priceValue01 == value
 
             var record = new ServiceRecord(
-                overallQuality01: value,
+                quality: new DishQuality(
+                    overall01: value, ingredientQuality01: value, brothQuality01: value,
+                    accuracy01: value, temperature01: value, freshness01: value),
                 accuracy01: value,
                 waitSeconds: waitSeconds,
                 cleanliness01: value,
@@ -63,7 +66,9 @@ namespace Pho.Domain.Tests
             // Cleanliness deliberately far from the neutral midpoint (0.5) so
             // sensitivity divergence is unmissable.
             var record = new ServiceRecord(
-                overallQuality01: 0.7f,
+                quality: new DishQuality(
+                    overall01: 0.7f, ingredientQuality01: 0.7f, brothQuality01: 0.7f,
+                    accuracy01: 0.7f, temperature01: 0.7f, freshness01: 0.7f),
                 accuracy01: 0.7f,
                 waitSeconds: 30f,
                 cleanliness01: 0.1f,
