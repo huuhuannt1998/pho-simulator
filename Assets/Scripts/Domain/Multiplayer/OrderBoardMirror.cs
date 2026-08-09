@@ -2,7 +2,14 @@ using System;
 using System.Collections.Generic;
 using Pho.Domain.Events;
 
-namespace Pho.Net.State
+// MOVED from Pho.Net.State at integration. This is pure, engine-free
+// reconciliation logic, but living under Assets/Scripts/Net/ put it outside
+// what Tools/PhoDomain.Tests.csproj globs, so its edge cases could not be
+// covered by the 100ms test loop at all -- and a silently-wrong reconciler
+// is exactly the kind of bug that only shows up as "a client's order board
+// slowly drifts out of sync". Domain/Multiplayer/ is where CarryRegistry
+// already lives for the same reason.
+namespace Pho.Domain.Multiplayer
 {
     /// <summary>What kind of change <see cref="OrderBoardMirror"/> detected.</summary>
     public enum OrderBoardOpKind
