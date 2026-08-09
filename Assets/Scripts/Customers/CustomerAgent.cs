@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using Pho.Domain.Contracts;
@@ -60,7 +61,7 @@ namespace Pho.Customers
         [SerializeField] Transform exitTransform;
 
         [Header("Stand-ins for services that don't exist yet (later waves)")]
-        [Tooltip("STAND-IN for a real RestaurantState/day-cycle open-closed signal -- no such service exists in Unity yet (later-wave work per architecture.md §9 M6/M11). A later wiring pass should replace reads of this with a real binding.")]
+        [Tooltip("Backing field for the restaurant open/closed signal. Now kept in sync with the real RestaurantOpened/RestaurantClosed events (see Bind's subscription below) once bound; still serialized as the initial value / manual-override seam for a customer spawned before the day-cycle service publishes its first event, or for testing without one.")]
         [SerializeField] bool simulateRestaurantOpen = true;
         [Tooltip("STAND-IN for a real cleanliness system (architecture.md §6.2/§12 reduces cleanliness to a single float, but no producer of that float exists in Unity yet). Serialized so it can be tuned per-instance for now.")]
         [SerializeField, Range(0f, 1f)] float cleanliness01Stub = 1f;
@@ -82,7 +83,13 @@ namespace Pho.Customers
         TableRegistry.SeatId _claimedSeatId = TableRegistry.SeatId.Invalid;
         bool _hasClaimedSeat;
 
-        /// <summary>Public stand-in for restaurant open/closed (see field tooltip). A later wave replaces reads of this with a real RestaurantState binding.</summary>
+        // Restaurant-open-state event subscriptions (RestaurantOpened/
+        // RestaurantClosed, see Bind below), disposed in OnDestroy. Follows
+        // the same IDisposable-subscription-list idiom as UI/Presenters/*
+        // (e.g. CashPresenter) elsewhere in this codebase.
+        readonly List<IDisposable> _subscriptions = new List<IDisposable>();
+
+        /// <summary>Manual override / initial-value seam for restaurant open-closed (see field tooltip). Kept for tests and for a customer spawned before the first real RestaurantOpened/RestaurantClosed event -- once Bind() runs, real events keep this in sync going forward, but this setter still works as a manual override in between events.</summary>
         public bool SimulateRestaurantOpen
         {
             get => simulateRestaurantOpen;
@@ -110,11 +117,27 @@ namespace Pho.Customers
             _brain = new CustomerBrain(_customerId, _archetype, _cfg, _events, _rng);
             _bound = true;
             debugStateLabel = _brain.State.ToString();
+
+            // Real restaurant open/closed signal: replaces reads of the
+            // simulateRestaurantOpen stand-in with the actual
+            // RestaurantStateServiceBehaviour-published events (Core/DayCycle).
+            // Extends this existing Bind(...) rather than adding a separate
+            // BindRestaurantState(IEventBus) -- `events` is already a
+            // parameter here, so this is the smaller, non-duplicating edit.
+            _subscriptions.Add(events.Subscribe<RestaurantOpened>(_ => simulateRestaurantOpen = true));
+            _subscriptions.Add(events.Subscribe<RestaurantClosed>(_ => simulateRestaurantOpen = false));
         }
 
         void Awake()
         {
             if (navAgent == null) navAgent = GetComponent<NavMeshAgent>();
+        }
+
+        /// <summary>Unsubscribes every event subscription this instance registered (currently just RestaurantOpened/RestaurantClosed from Bind). Mirrors the IDisposable-subscription-list teardown idiom used by UI/Presenters/*.</summary>
+        void OnDestroy()
+        {
+            foreach (var sub in _subscriptions) sub.Dispose();
+            _subscriptions.Clear();
         }
 
         void Update()
@@ -129,7 +152,7 @@ namespace Pho.Customers
         // ICustomerWorld
         // ---------------------------------------------------------------
 
-        /// <summary>REAL (delegates to the serialized stand-in field above -- see field tooltip for why it's a stand-in, not a stub-with-log).</summary>
+        /// <summary>REAL: delegates to simulateRestaurantOpen, which Bind() now keeps in sync with the real RestaurantOpened/RestaurantClosed events (Core/DayCycle's RestaurantStateServiceBehaviour) -- see field tooltip.</summary>
         public bool RestaurantIsOpen => simulateRestaurantOpen;
 
         /// <summary>REAL plumbing to TableRegistry, with a documented placeholder for the SeatHandle value itself -- see the class doc comment's SEAT-HANDLE INTEGRATION GAP section.</summary>
