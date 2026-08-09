@@ -1,0 +1,18 @@
+{
+    "name": "Pho.Net",
+    "rootNamespace": "Pho.Net",
+    "references": [
+        "Pho.Domain",
+        "Pho.Core",
+        "Unity.Netcode.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
