@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "gameVersion": "0.1.0",
+  "savedAtUnixSeconds": 1770500000,
+  "world": {
+    "day": 3,
+    "timeOfDaySeconds": 21600.0,
+    "phase": "Prep"
+  },
+  "economy": {
+    "cash": 482.50,
+    "recentDays": [
+      { "day": 1, "revenue": 210.00, "ingredientCost": 60.25, "rent": 0, "utilities": 12.00, "profit": 137.75 },
+      { "day": 2, "revenue": 255.50, "ingredientCost": 70.00, "rent": 0, "utilities": 12.00, "profit": 173.50 }
+    ]
+  },
+  "inventory": {
+    "lots": [
+      { "ingredientId": "ing.beef_brisket", "quantity": 8.5, "qualityAtPurchase": 0.92, "freshness": 0.81, "purchasedOnDay": 2, "storage": "Refrigerated" },
+      { "ingredientId": "ing.rice_noodle", "quantity": 20.0, "qualityAtPurchase": 0.88, "freshness": 0.95, "purchasedOnDay": 3, "storage": "Ambient" }
+    ]
+  },
+  "progression": {
+    "unlockedRecipeIds": [ "rec.pho_tai", "rec.pho_chin" ],
+    "ownedEquipmentIds": [ "eq.burner_basic" ],
+    "menuPrices": { "rec.pho_tai": 8.50, "rec.pho_chin": 8.00 },
+    "reputation": 0.63,
+    "flags": { "tutorial.completed": true, "seenMenuBoard": false }
+  },
+  "restaurant": {
+    "cleanliness01": 0.9,
+    "dirtyTableIds": [ "table.02" ]
+  },
+  "player": {
+    "position": { "x": 1.5, "y": 0.0, "z": -3.25 },
+    "yaw": 90.0
+  }
+}
