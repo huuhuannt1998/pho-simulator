@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Pho.Core;
+using Pho.Core.DayCycle;
 using Pho.Customers;
 using Pho.Data;
 using Pho.Domain.Contracts;
@@ -11,6 +12,7 @@ using Pho.Player;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace Pho.EditorTools
 {
@@ -45,6 +47,9 @@ namespace Pho.EditorTools
     {
         const string ScenesFolder = "Assets/Scenes";
         const string BootScenePath = ScenesFolder + "/Boot.unity";
+
+        const string NavMeshDataFolder = "Assets/NavMeshData";
+        const string NavMeshDataAssetPath = NavMeshDataFolder + "/Boot.asset";
 
         const string GameDatabasePath = "Assets/Content/GameDatabase.asset";
         const string GameBalanceConfigPath = "Assets/Content/GameBalanceConfig.asset";
@@ -103,6 +108,7 @@ namespace Pho.EditorTools
         const string CustomerSpawnerName = "CustomerSpawner";
         const string EntranceName = "Entrance";
         const string ExitName = "Exit";
+        const string RestaurantSignName = "RestaurantSign";
 
         // Kitchen sits at x=+5, dining at x=-5 -- both well clear of the
         // player's spawn at (0,1,-2) and of each other. Coordinates below
@@ -162,6 +168,13 @@ namespace Pho.EditorTools
         static readonly Vector3 EntrancePosition = DiningOrigin + new Vector3(0f, 0f, 4f);
         static readonly Vector3 ExitPosition = DiningOrigin + new Vector3(-4f, 0f, 4f);
 
+        // Grey-box post beside the entrance -- the one physical object that
+        // lets the player open/close the restaurant (RestaurantSign,
+        // Pho.Core.DayCycle). Offset to the side of EntrancePosition so it
+        // doesn't sit on top of the customer spawn point/entrance transform.
+        static readonly Vector3 RestaurantSignPosition = EntrancePosition + new Vector3(1.5f, 0.9f, 0f);
+        static readonly Vector3 RestaurantSignScale = new Vector3(0.3f, 1.8f, 0.3f);
+
         [MenuItem("Pho/Scenes/Build Boot Scene")]
         public static void BuildBootScene()
         {
@@ -178,6 +191,7 @@ namespace Pho.EditorTools
             var seatSlots = BuildDiningArea();
             BuildTableRegistry(seatSlots);
             BuildCustomerSpawnerAndEntranceExit();
+            BuildRestaurantSign();
 
             // Baked LAST so the NavMesh accounts for every obstacle placed
             // above (kitchen stations, tables) rather than just the bare
@@ -200,7 +214,7 @@ namespace Pho.EditorTools
                 $"[SceneBuilder] Built '{BootScenePath}' -- ground, sun, player @ {PlayerSpawnPosition}, " +
                 $"GameBootstrap, kitchen ({IngredientStationDefs.Length} ingredient stations + broth pot + pass " +
                 $"counter + bowl stack), dining ({TableCount} tables / {seatSlots.Count} seats), " +
-                $"customer spawner + entrance/exit, baked NavMesh.");
+                $"customer spawner + entrance/exit, restaurant sign, baked NavMesh.");
         }
 
         static void EnsureFolder()
@@ -493,6 +507,23 @@ namespace Pho.EditorTools
             }
         }
 
+        // ------------------------------------------------------------------
+        // Restaurant sign (open/close IInteractable)
+        // ------------------------------------------------------------------
+
+        static void BuildRestaurantSign()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = RestaurantSignName;
+            go.transform.position = RestaurantSignPosition;
+            go.transform.localScale = RestaurantSignScale;
+            // CreatePrimitive(Cube) already adds a BoxCollider, which is all
+            // RestaurantSign needs to be raycast-hittable by PlayerInteractor
+            // (RestaurantSign has no [RequireComponent(typeof(Collider))],
+            // but IInteractable objects need a collider to be hit at all).
+            go.AddComponent<RestaurantSign>();
+        }
+
         static void BakeNavMesh(GameObject ground)
         {
             var surfaceType = Type.GetType(NavMeshSurfaceAssemblyQualifiedName);
@@ -512,6 +543,38 @@ namespace Pho.EditorTools
             }
 
             buildMethod.Invoke(surface, null);
+
+            // Extract the baked NavMeshData to its own external .asset file.
+            // GOTCHA (confirmed via a standalone repro, not assumed): if the
+            // baked NavMeshData is left embedded as an inline sub-object of
+            // the scene, Unity silently serializes the WHOLE containing
+            // scene file as binary -- even with
+            // EditorSettings.serializationMode == ForceText project-wide --
+            // which defeats the "scenes are reviewable text diffs"
+            // requirement (`file Boot.unity` reported "data" instead of
+            // "ASCII text", and the file had no `%YAML` header at all).
+            // Saving the same bake as a standalone asset keeps the scene
+            // itself text-serialized; NavMeshData.asset is expected to be
+            // (and always was, even before this fix) an opaque binary blob
+            // -- that's fine, it was never meant to be hand-reviewed like a
+            // scene diff, only the scene file needs to be.
+            var navMeshDataProp = surfaceType.GetProperty("navMeshData", BindingFlags.Public | BindingFlags.Instance);
+            var navMeshData = navMeshDataProp?.GetValue(surface) as NavMeshData;
+            if (navMeshData != null)
+            {
+                if (!AssetDatabase.IsValidFolder(NavMeshDataFolder))
+                    AssetDatabase.CreateFolder("Assets", "NavMeshData");
+
+                // Idempotent regen: BuildBootScene always starts from a
+                // brand-new scene, so the previous bake's asset (if any) is
+                // stale and must be replaced, not merged into.
+                AssetDatabase.DeleteAsset(NavMeshDataAssetPath);
+                AssetDatabase.CreateAsset(navMeshData, NavMeshDataAssetPath);
+            }
+            else
+            {
+                Debug.LogWarning("[SceneBuilder] NavMeshSurface.navMeshData was null after BuildNavMesh() -- could not extract it to an external asset; the scene may end up binary-serialized.");
+            }
         }
 
         static void RegisterInBuildSettings()
