@@ -48,9 +48,13 @@ namespace Pho.EditorTools
         const string PrefabsFolder = "Assets/Prefabs";
         const string CustomerPrefabPath = PrefabsFolder + "/Customer.prefab";
         const string BowlPrefabPath = PrefabsFolder + "/Bowl.prefab";
+        const string PlayerPrefabPath = PrefabsFolder + "/Player.prefab";
 
         const string CustomerRootName = "Customer";
         const string BowlRootName = "Bowl";
+        const string PlayerRootName = "Player";
+        const string PlayerCameraPivotName = "CameraPivot";
+        const string PlayerModelRootName = "ModelRoot";
 
         // "reasonable defaults ... matching a capsule" per the brief.
         const float CustomerNavAgentRadius = 0.4f;
@@ -66,11 +70,97 @@ namespace Pho.EditorTools
 
             BuildCustomerPrefab();
             BuildBowlPrefab();
+            BuildPlayerPrefab();
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log($"[PrefabBuilder] Built '{CustomerPrefabPath}' and '{BowlPrefabPath}'.");
+            Debug.Log($"[PrefabBuilder] Built '{CustomerPrefabPath}', '{BowlPrefabPath}' and '{PlayerPrefabPath}'.");
+        }
+
+        /// <summary>
+        /// Builds Assets/Prefabs/Player.prefab -- the object Netcode spawns
+        /// once per connected client.
+        ///
+        /// WHY A PREFAB AT ALL, when SceneBuilder already places a player:
+        /// NGO spawns players from NetworkManager.NetworkConfig.PlayerPrefab,
+        /// so a scene-placed player can never be one of the four. The
+        /// scene-placed player remains the OFFLINE player for single-player;
+        /// reconciling the two (disable the offline one when a session
+        /// starts) is the next integration step and is deliberately not done
+        /// here, so the currently-working single-player path stays working.
+        ///
+        /// Camera and AudioListener are CHILDREN of the prefab, not scene
+        /// objects, because NetworkPlayer.SetLocalRigEnabled finds them with
+        /// GetComponentsInChildren and switches them off on every remote
+        /// body -- otherwise four cameras fight and every client runs four
+        /// AudioListeners.
+        /// </summary>
+        static void BuildPlayerPrefab()
+        {
+            var root = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath) != null
+                ? PrefabUtility.LoadPrefabContents(PlayerPrefabPath)
+                : new GameObject(PlayerRootName);
+
+            root.name = PlayerRootName;
+
+            // Strip children so a rerun rebuilds cleanly rather than
+            // accumulating duplicate camera pivots.
+            for (int i = root.transform.childCount - 1; i >= 0; i--)
+                UnityEngine.Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
+
+            EnsureComponent<CharacterController>(root);
+            EnsureComponent<Pho.Player.FirstPersonMotor>(root);
+            EnsureComponent<Pho.Player.PlayerInteractor>(root);
+            EnsureComponent<Unity.Netcode.NetworkObject>(root);
+            EnsureComponent<Pho.Net.Player.NetworkPlayer>(root);
+
+            var pivot = new GameObject(PlayerCameraPivotName);
+            pivot.transform.SetParent(root.transform, false);
+            pivot.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+            pivot.AddComponent<Camera>();
+            pivot.AddComponent<AudioListener>();
+
+            var modelRoot = new GameObject(PlayerModelRootName);
+            modelRoot.transform.SetParent(root.transform, false);
+
+            var motor = root.GetComponent<Pho.Player.FirstPersonMotor>();
+            SetRef(motor, "cameraPivot", pivot.transform);
+
+            var netPlayer = root.GetComponent<Pho.Net.Player.NetworkPlayer>();
+            SetRef(netPlayer, "modelRoot", modelRoot.transform);
+
+            var interactor = root.GetComponent<Pho.Player.PlayerInteractor>();
+            SetInt(interactor, "interactableMask", ~0);
+
+            PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
+            UnityEngine.Object.DestroyImmediate(root);
+        }
+
+        static T EnsureComponent<T>(GameObject go) where T : Component
+        {
+            var existing = go.GetComponent<T>();
+            return existing != null ? existing : go.AddComponent<T>();
+        }
+
+        static void SetRef(UnityEngine.Object target, string field, UnityEngine.Object value)
+        {
+            if (target == null) return;
+            var so = new SerializedObject(target);
+            var prop = so.FindProperty(field);
+            if (prop == null) { Debug.LogWarning($"[PrefabBuilder] no field '{field}' on {target.GetType().Name}"); return; }
+            prop.objectReferenceValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static void SetInt(UnityEngine.Object target, string field, int value)
+        {
+            if (target == null) return;
+            var so = new SerializedObject(target);
+            var prop = so.FindProperty(field);
+            if (prop == null) { Debug.LogWarning($"[PrefabBuilder] no field '{field}' on {target.GetType().Name}"); return; }
+            prop.intValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         static void EnsureFolder()

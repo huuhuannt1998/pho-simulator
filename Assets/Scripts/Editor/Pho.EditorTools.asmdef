@@ -9,7 +9,9 @@
         "Pho.Player",
         "Pho.Kitchen",
         "Pho.Customers",
-        "Pho.UI"
+        "Pho.UI",
+        "Pho.Net",
+        "Unity.Netcode.Runtime"
     ],
     "includePlatforms": [
         "Editor"

@@ -7,6 +7,9 @@ using Pho.Core.DayCycle;
 using Pho.Core.Progression;
 using Pho.Core.Restaurant;
 using Pho.Core.Save;
+using Pho.Net;
+using Pho.Net.Session;
+using Pho.Net.State;
 using Pho.Customers;
 using Pho.Data;
 using Pho.Domain.Contracts;
@@ -221,6 +224,7 @@ namespace Pho.EditorTools
             BuildSun();
             BuildPlayer();
             BuildGameManager();
+            BuildNetworking();
 
             BuildKitchenArea();
             var seatSlots = BuildDiningArea();
@@ -250,7 +254,7 @@ namespace Pho.EditorTools
                 $"[SceneBuilder] Built '{BootScenePath}' -- ground, sun, player @ {PlayerSpawnPosition}, " +
                 $"GameBootstrap, kitchen ({IngredientStationDefs.Length} ingredient stations + broth pot + pass " +
                 $"counter + bowl stack), dining ({TableCount} tables / {seatSlots.Count} seats), " +
-                $"customer spawner + entrance/exit, restaurant sign, upgrade station, baked NavMesh.");
+                $"customer spawner + entrance/exit, restaurant sign, upgrade station, networking (NetworkManager + session authority), baked NavMesh.");
         }
 
         // ------------------------------------------------------------------
@@ -557,6 +561,64 @@ namespace Pho.EditorTools
             {
                 Debug.LogWarning($"[SceneBuilder] Could not load '{GameBalanceConfigPath}' -- GameBootstrap.balanceConfig left unassigned. Run ContentGenerator first.");
             }
+        }
+
+        // ------------------------------------------------------------------
+        // Networking
+        // ------------------------------------------------------------------
+
+        const string NetworkManagerName = "NetworkManager";
+        const string SessionObjectName = "SessionAuthority";
+        const string PlayerPrefabPath = "Assets/Prefabs/Player.prefab";
+
+        /// <summary>
+        /// Places the co-op session objects. All of this is INERT until
+        /// someone starts a host or joins -- NetworkManager does nothing on
+        /// its own, so single-player is unaffected by its presence.
+        ///
+        /// Two objects, deliberately separate:
+        ///  * NetworkManager + NetworkSession -- connection lifecycle. No
+        ///    transport component is added here; NetworkSession attaches the
+        ///    one it needs, which is what keeps UnityTransport-vs-Steam a
+        ///    runtime choice rather than a scene-authoring decision.
+        ///  * SessionAuthority -- a NetworkObject carrying CarryAuthority
+        ///    and SharedStateReplicator. These are spawned network objects
+        ///    rather than NetworkManager components because they have
+        ///    replicated state and RPCs of their own.
+        /// </summary>
+        static void BuildNetworking()
+        {
+            var nmGo = new GameObject(NetworkManagerName);
+            var nm = nmGo.AddComponent<Unity.Netcode.NetworkManager>();
+            nmGo.AddComponent<NetworkSession>();
+
+            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+            if (playerPrefab != null)
+            {
+                // NGO spawns one of these per connected client. Set through
+                // SerializedObject because NetworkConfig is a serialized
+                // field, not a runtime-settable property at edit time.
+                var so = new SerializedObject(nm);
+                var prop = so.FindProperty("NetworkConfig.PlayerPrefab");
+                if (prop != null)
+                {
+                    prop.objectReferenceValue = playerPrefab;
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                }
+                else
+                {
+                    Debug.LogWarning("[SceneBuilder] Could not find NetworkConfig.PlayerPrefab -- assign the player prefab on NetworkManager by hand.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[SceneBuilder] No '{PlayerPrefabPath}' -- run 'Pho/Prefabs/Build All Prefabs' first. Clients will connect but no player will spawn.");
+            }
+
+            var session = new GameObject(SessionObjectName);
+            session.AddComponent<Unity.Netcode.NetworkObject>();
+            session.AddComponent<CarryAuthority>();
+            session.AddComponent<SharedStateReplicator>();
         }
 
         // ------------------------------------------------------------------
