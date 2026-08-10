@@ -452,6 +452,15 @@ namespace Pho.Net.Session
             if (_boundManager != null && !_boundManager.IsServer && clientId == _boundManager.LocalClientId)
             {
                 _status.TryTransition(SessionState.Connected, out _);
+                Debug.Log($"[NetworkSession] Connected to the host as client {clientId}.");
+            }
+            else if (_boundManager != null && _boundManager.IsServer)
+            {
+                // Logged because a co-op session with no UI is otherwise
+                // completely silent about whether anyone actually arrived --
+                // "did it connect?" was unanswerable from the player log,
+                // which made the first two-instance test undiagnosable.
+                Debug.Log($"[NetworkSession] Client {clientId} joined ({_boundManager.ConnectedClientsIds.Count}/{_slots?.MaxPlayers ?? SessionSlots.DefaultMaxPlayers} players).");
             }
 
             PlayerJoined?.Invoke(clientId);
@@ -480,11 +489,13 @@ namespace Pho.Net.Session
                 ? _boundManager.DisconnectReason
                 : "Disconnected from the host. They may have closed the game.";
 
+            Debug.LogWarning($"[NetworkSession] Disconnected: {reason}");
             _status.Fail(reason);
         }
 
         void HandleTransportFailure()
         {
+            Debug.LogError($"[NetworkSession] Transport failure on {TransportName}.");
             _status.Fail($"The network connection failed ({TransportName}).");
         }
 
